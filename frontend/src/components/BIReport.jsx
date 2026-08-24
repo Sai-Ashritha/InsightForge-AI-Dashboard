@@ -29,7 +29,7 @@ function BIReport({ url, kpis }) {
           </div>
           <div>
             <p className="section-kicker">Enterprise Analytics</p>
-            <h3>STEP 15 — Business Intelligence (Power BI / Metabase)</h3>
+            <h3>Business Intelligence (Power BI / Metabase)</h3>
           </div>
         </div>
         <div className="bi-tab-controls">

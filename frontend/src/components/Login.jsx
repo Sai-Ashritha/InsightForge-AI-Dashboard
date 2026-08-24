@@ -44,7 +44,7 @@ function Login({ email, password, message, loading, onEmailChange, onPasswordCha
           <h2>InsightForge AI</h2>
           <p className="login-subtitle">Predictive Manufacturing Intelligence Platform</p>
           <div className="step-indicator-pill">
-            <span className="step-num">STEP 1</span> Authentication & Access
+            <ShieldCheck size={12} /> Secure Access Portal
           </div>
         </div>
 
