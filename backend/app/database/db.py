@@ -104,12 +104,11 @@ def infer_table_for_dataframe(df: pd.DataFrame):
     best_score = -1
 
     for table_name, expected_columns in TABLE_FIELD_MAP.items():
-        alias_columns = {
-            alias
-            for value in COLUMN_ALIASES.get(table_name, {}).values()
-            for alias in value
-        }
-        score = sum(1 for col in expected_columns if col in columns or col in alias_columns)
+        all_table_cols = set(expected_columns)
+        for aliases in COLUMN_ALIASES.get(table_name, {}).values():
+            all_table_cols.update(aliases)
+        
+        score = len(columns.intersection(all_table_cols))
         if score > best_score:
             best_score = score
             best_table = table_name
@@ -337,7 +336,7 @@ def insert_dataframe_to_table(df: pd.DataFrame, table_name: str):
         conn.close()
 
 
-def save_uploaded_dataframe(df: pd.DataFrame):
+def save_uploaded_dataframe(df: pd.DataFrame, clear_existing: bool = True):
     normalized_columns = {_normalize_column_name(column) for column in df.columns}
     combined_columns = {"production", "inventory", "employees", "efficiency", "defect_rate"}
 
@@ -348,8 +347,9 @@ def save_uploaded_dataframe(df: pd.DataFrame):
         inserted_rows = 0
         target_tables = ["sales", "production", "inventory", "employees"]
 
-        for table_name in target_tables:
-            clear_table(table_name)
+        if clear_existing:
+            for table_name in target_tables:
+                clear_table(table_name)
 
         sales_data = source[[column for column in ["date", "product", "region", "quantity", "revenue"] if column in source.columns]].copy()
         if not sales_data.empty:
@@ -392,7 +392,14 @@ def save_uploaded_dataframe(df: pd.DataFrame):
         }
 
     table_name = infer_table_for_dataframe(df)
-    clear_table(table_name)
+    if clear_existing:
+        if table_name == "sales":
+            clear_table("production")
+            clear_table("inventory")
+            clear_table("employees")
+        clear_table(table_name)
+    else:
+        clear_table(table_name)
     return insert_dataframe_to_table(df, table_name)
 
 

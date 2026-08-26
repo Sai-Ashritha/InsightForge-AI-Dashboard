@@ -7,12 +7,41 @@ const PROMPT_SUGGESTIONS = [
   'Explain detected process anomalies',
 ]
 
-function ChatDrawer({ messages, input, loading, provider, onInputChange, onSend, onSelectPrompt }) {
+function ChatDrawer({
+  messages = [],
+  input = '',
+  loading = false,
+  provider = '',
+  onInputChange,
+  onSendMessage,
+  onSend,
+  onSelectPrompt,
+  kpis,
+}) {
+  const sendHandler = onSendMessage || onSend
+
+  const handleSendClick = (queryToSend = input) => {
+    if (sendHandler) {
+      sendHandler(queryToSend)
+    }
+  }
+
+  const handlePromptClick = (suggestion) => {
+    if (onSelectPrompt) {
+      onSelectPrompt(suggestion)
+    } else if (onInputChange) {
+      onInputChange(suggestion)
+      if (sendHandler) {
+        sendHandler(suggestion)
+      }
+    }
+  }
+
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       if (input.trim() && !loading) {
-        onSend()
+        handleSendClick(input)
       }
     }
   }
@@ -26,12 +55,12 @@ function ChatDrawer({ messages, input, loading, provider, onInputChange, onSend,
           </div>
           <div>
             <p className="section-kicker">Operational Intelligence</p>
-            <h3>Ask AI Assistant (Steps 13 & 14)</h3>
+            <h3>InsightForge AI Assistant</h3>
           </div>
         </div>
         {provider && (
           <span className="provider-pill">
-            <Cpu size={12} /> {provider === 'ollama' ? 'Ollama Llama-3.2' : 'Manufacturing Engine'}
+            <Cpu size={12} /> {provider === 'ollama' ? 'Ollama Llama-3.2' : provider === 'gemini' ? 'Gemini 1.5 Pro' : 'Manufacturing Engine'}
           </span>
         )}
       </div>
@@ -46,7 +75,7 @@ function ChatDrawer({ messages, input, loading, provider, onInputChange, onSend,
               key={idx}
               type="button"
               className="suggestion-chip"
-              onClick={() => onSelectPrompt(suggestion)}
+              onClick={() => handlePromptClick(suggestion)}
               disabled={loading}
             >
               {suggestion}

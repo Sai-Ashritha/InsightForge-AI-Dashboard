@@ -18,16 +18,16 @@ import {
 
 const NAV_TABS = [
   {
+    id: 'quality',
+    label: 'Quality & Cleaning',
+    icon: ShieldCheck,
+    description: 'Data upload & pipeline',
+  },
+  {
     id: 'overview',
     label: 'Overview',
     icon: LayoutDashboard,
     description: 'KPIs & live charts',
-  },
-  {
-    id: 'quality',
-    label: 'Quality & Cleaning',
-    icon: ShieldCheck,
-    description: 'Data pipeline',
   },
   {
     id: 'insights',
@@ -49,7 +49,7 @@ const NAV_TABS = [
   },
 ]
 
-function SidebarNav({ activeTab, onTabChange, authToken, currentUser, onSignOut, isAuthenticated, onCollapsedChange }) {
+function SidebarNav({ activeTab, onTabChange, authToken, currentUser, onSignOut, isAuthenticated, onCollapsedChange, hasUploadedData = false }) {
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
 
@@ -118,7 +118,16 @@ function SidebarNav({ activeTab, onTabChange, authToken, currentUser, onSignOut,
           {NAV_TABS.map((tab) => {
             const Icon = tab.icon
             const isActive = activeTab === tab.id
-            const isDisabled = !isAuthenticated && tab.id !== 'quality'
+            const isQualityTab = tab.id === 'quality'
+            const isDisabled = isQualityTab ? false : (!isAuthenticated || !hasUploadedData)
+
+            const tooltipText = isQualityTab 
+              ? (collapsed ? tab.label : undefined)
+              : !isAuthenticated 
+                ? 'Sign in first' 
+                : !hasUploadedData 
+                  ? 'Upload dataset in Quality & Cleaning to unlock' 
+                  : (collapsed ? tab.label : undefined)
 
             return (
               <button
@@ -132,7 +141,7 @@ function SidebarNav({ activeTab, onTabChange, authToken, currentUser, onSignOut,
                   }
                 }}
                 disabled={isDisabled}
-                title={collapsed ? tab.label : undefined}
+                title={tooltipText}
                 aria-current={isActive ? 'page' : undefined}
               >
                 <span className="nav-item-icon">
@@ -140,8 +149,15 @@ function SidebarNav({ activeTab, onTabChange, authToken, currentUser, onSignOut,
                 </span>
                 {!collapsed && (
                   <span className="nav-item-text">
-                    <span className="nav-item-label">{tab.label}</span>
-                    <span className="nav-item-desc">{tab.description}</span>
+                    <span className="nav-item-label">
+                      {tab.label}
+                      {isDisabled && !isQualityTab && (
+                        <span className="nav-item-lock-pill">Upload Required</span>
+                      )}
+                    </span>
+                    <span className="nav-item-desc">
+                      {isDisabled && !isQualityTab ? 'Locked until data is uploaded' : tab.description}
+                    </span>
                   </span>
                 )}
                 {isActive && !collapsed && <span className="nav-item-indicator" aria-hidden="true" />}
