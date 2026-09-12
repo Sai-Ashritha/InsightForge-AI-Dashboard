@@ -481,11 +481,9 @@ function App() {
         {
           role: 'ai',
           content:
-            'Based on the sales forecast and current inventory, you should increase production of Product A next month.\n\n' +
-            '1. **Analysis**:\nDemand is expected to increase by approximately 18%, with projected next-month revenue reaching ₹8.5L.\n\n' +
-            '2. **Probable Cause**:\nCurrent inventory is approaching the reorder level while regional orders for electronics are surging.\n\n' +
-            '3. **Recommendation**:\nIncrease production by 15-20% and allocate two assembly lines to high-velocity SKUs.\n\n' +
-            '4. **Suggested Action**:\nIssue component replenishment orders immediately and schedule off-peak line maintenance.',
+            'The assistant could not generate a response from the active dataset because the upload or analytics context is unavailable.\n\n' +
+            'Please upload a CSV, Excel, or JSON dataset, then ask a question such as: total sales, top product, data quality, or a trend summary.\n\n' +
+            'If the requested field is not present in the uploaded file, the answer will state that the dataset does not contain that information.',
         },
       ])
     } finally {

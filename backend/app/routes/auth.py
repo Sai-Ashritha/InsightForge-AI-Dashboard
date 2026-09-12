@@ -64,11 +64,17 @@ def register(user: UserRegistration):
 
     try:
         created = orm_create_user(
+            user.email,
+            hash_password(user.password),
+            user.role,
+        )
+    except TypeError:
+        created = orm_create_user(
             email=user.email,
             hashed_password=hash_password(user.password),
             role=user.role,
             full_name=user.full_name,
-            is_verified=False,   # requires OTP verification
+            is_verified=False,
         )
     except Exception as exc:
         raise HTTPException(status_code=500, detail="Unable to create user") from exc
@@ -82,9 +88,9 @@ def register(user: UserRegistration):
     return {
         "id": created.id,
         "email": created.email,
-        "full_name": created.full_name,
+        "full_name": getattr(created, "full_name", None),
         "role": created.role,
-        "is_verified": created.is_verified,
+        "is_verified": getattr(created, "is_verified", False),
         "verification_required": True,
         "email_sent": is_real_smtp,
     }
@@ -148,7 +154,8 @@ def login(form_data: OAuth2PasswordRequestForm = Depends()):
         )
 
     # If account exists but OTP not verified, prompt verification
-    if not user.is_verified:
+    is_verified = getattr(user, "is_verified", True)
+    if not is_verified:
         # Re-send OTP so they can verify
         code = generate_otp()
         expires = otp_expiry()
@@ -164,7 +171,7 @@ def login(form_data: OAuth2PasswordRequestForm = Depends()):
         "access_token": create_access_token(user.email, user.role),
         "token_type": "bearer",
         "role": user.role,
-        "full_name": user.full_name,
+        "full_name": getattr(user, "full_name", None),
     }
 
 

@@ -9,6 +9,7 @@ from app.auth import get_current_user
 from app.database.db import save_uploaded_dataframe
 from app.services.data_cleaner import clean_dataframe
 from app.services.data_quality import assess_data_quality, clean_dataset_with_stats
+from app.services.dynamic_engine import set_active_dataset
 
 router = APIRouter()
 
@@ -111,6 +112,8 @@ async def upload_file(
 
     user_key = current_user.get("email", "default") if isinstance(current_user, dict) else getattr(current_user, "email", "default")
     _CLEANED_CACHE[user_key] = clean_df
+    set_active_dataset(user_key, clean_df, file_name)
+    set_active_dataset("default", clean_df, file_name)
 
     return {
         "status": "success",
@@ -195,6 +198,8 @@ async def upload_multiple_files(
             _CLEANED_CACHE[user_key] = pd.concat(cleaned_dfs, ignore_index=True)
         except Exception:
             _CLEANED_CACHE[user_key] = cleaned_dfs[0]
+        set_active_dataset(user_key, _CLEANED_CACHE[user_key], ", ".join(f["file_name"] for f in processed_files))
+        set_active_dataset("default", _CLEANED_CACHE[user_key], ", ".join(f["file_name"] for f in processed_files))
 
     avg_quality = round(sum(quality_scores) / len(quality_scores), 1) if quality_scores else 94.0
 

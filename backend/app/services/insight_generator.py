@@ -1,258 +1,228 @@
 import re
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
+import pandas as pd
 
 
 class InsightGenerator:
-    """Generate natural language business insights and 4-part AI recommendations from data and analytics."""
-
-    def __init__(self):
-        self.kpi_insights = {}
-        self.anomaly_insights = []
-        self.recommendation_insights = []
+    """
+    Generate accurate, grounded, understandable business intelligence answers
+    strictly based on the active uploaded dataset and computed analytics.
+    """
 
     def generate_kpi_summary(self, kpis: dict) -> str:
-        """Generate executive summary of KPIs."""
         if not kpis:
-            return "No KPI data available."
+            return "No dataset analytics available. Please upload a dataset in Quality & Cleaning."
 
-        summary_parts = []
-        revenue = kpis.get("revenue", 0)
-        if revenue > 0:
-            revenue_label = f"₹{int(revenue / 100000)}L" if revenue >= 100000 else f"₹{int(revenue):,}"
-            summary_parts.append(f"Total revenue stands at {revenue_label}.")
+        parts = []
+        if "revenue" in kpis and kpis["revenue"] > 0:
+            rev = kpis["revenue"]
+            rev_label = f"₹{rev / 100000:.2f}L" if rev >= 100000 else f"₹{rev:,.2f}"
+            parts.append(f"Total revenue is {rev_label} across {kpis.get('orders', kpis.get('total_records', 0))} records.")
+        elif "total_records" in kpis:
+            parts.append(f"Dataset contains {kpis['total_records']} total records.")
 
-        efficiency = kpis.get("efficiency", 0)
-        if efficiency:
-            if efficiency > 90:
-                summary_parts.append(f"Production efficiency is excellent at {efficiency}%.")
-            elif efficiency > 80:
-                summary_parts.append(f"Production efficiency is good at {efficiency}%.")
-            else:
-                summary_parts.append(f"Production efficiency is below target at {efficiency}%.")
+        if "defect_rate" in kpis and kpis.get("defect_rate", 0) > 0:
+            parts.append(f"Recorded defect rate is {kpis['defect_rate']}%.")
 
-        defect_rate = kpis.get("defect_rate", 0)
-        if defect_rate:
-            if defect_rate < 2:
-                summary_parts.append(f"Defect rate is optimal at {defect_rate}%.")
-            elif defect_rate < 3:
-                summary_parts.append(f"Defect rate is acceptable at {defect_rate}%.")
-            else:
-                summary_parts.append(f"Defect rate is elevated at {defect_rate}%.")
+        if "inventory" in kpis and kpis.get("inventory") is not None and kpis.get("inventory", 0) > 0:
+            parts.append(f"Current inventory stands at {kpis['inventory']:,} units.")
 
-        inventory = kpis.get("inventory", 0)
-        if inventory:
-            if inventory < 5000:
-                summary_parts.append(f"Inventory levels are critically low at {inventory:,} units.")
-            elif inventory < 10000:
-                summary_parts.append(f"Inventory levels are low at {inventory:,} units.")
-            else:
-                summary_parts.append(f"Inventory levels are healthy at {inventory:,} units.")
+        if "quality_score" in kpis:
+            parts.append(f"Data quality score is {kpis['quality_score']}% (out of 100%).")
 
-        production = kpis.get("production", 0)
-        if production:
-            summary_parts.append(f"Current production output is {production:,} units.")
-
-        return " ".join(summary_parts)
-
-    def generate_anomaly_insights(self, anomalies: list, total_records: int) -> str:
-        """Generate natural language description of anomalies."""
-        if not anomalies:
-            return "No anomalies detected in the data. All process metrics appear normal."
-
-        anomaly_count = len(anomalies)
-        percentage = round((anomaly_count / total_records) * 100, 1) if total_records > 0 else 0
-
-        if anomaly_count == 1:
-            anom = anomalies[0]
-            desc = anom.get("description", "Unusual deviation detected.")
-            return f"1 anomalous record detected ({percentage}% of dataset): {desc}"
-
-        top_desc = anomalies[0].get("description", "")
-        return f"{anomaly_count} anomalous deviations detected ({percentage}% of data). Major event: {top_desc}"
-
-    def generate_recommendation_summary(self, recommendations: list) -> str:
-        """Generate summary of top recommendations."""
-        if not recommendations:
-            return "No active recommendations available at this time."
-
-        critical = [r for r in recommendations if r.get("priority") == "critical"]
-        high = [r for r in recommendations if r.get("priority") == "high"]
-
-        summary_parts = []
-        if critical:
-            summary_parts.append(f"⚠️ CRITICAL ACTION: {critical[0].get('title')}. {critical[0].get('description')}")
-        if high and len(critical) < 2:
-            summary_parts.append(f"HIGH PRIORITY: {high[0].get('title')}.")
-
-        total_count = len(recommendations)
-        summary_parts.append(f"Overall, {total_count} actionable items prioritized.")
-        return " ".join(summary_parts)
-
-    def generate_probable_causes(
-        self,
-        kpis: dict,
-        anomalies: list = None,
-        sales_declines: list = None,
-        inventory_data: list = None,
-    ) -> dict:
-        """Analyze combined patterns across sales, inventory, and anomalies to identify probable causes."""
-        causes = []
-        anomalies = anomalies or []
-        sales_declines = sales_declines or []
-        inventory_data = inventory_data or []
-
-        # Check if sales decline is linked to inventory shortage
-        if sales_declines:
-            top_decline = sales_declines[0]
-            prod_name = top_decline.get("product", "Primary Product")
-            dec_pct = top_decline.get("decline_percentage", 15)
-
-            # Check if that product has low inventory
-            prod_inv = next((item for item in inventory_data if item.get("product") == prod_name), None)
-            if prod_inv and prod_inv.get("stock_available", 1000) <= prod_inv.get("reorder_level", 500):
-                causes.append({
-                    "issue": f"{prod_name} Sales Decline ({dec_pct}%)",
-                    "probable_cause": f"Sales declined because inventory availability decreased below the reorder level, causing stockouts and lost orders.",
-                    "evidence": f"Current stock: {prod_inv.get('stock_available', 0)} vs Reorder level: {prod_inv.get('reorder_level', 0)}.",
-                })
-            else:
-                causes.append({
-                    "issue": f"{prod_name} Sales Decline ({dec_pct}%)",
-                    "probable_cause": f"Sales declined because demand shifted toward alternative categories or seasonal purchasing cycles changed.",
-                    "evidence": f"Period-over-period decrease of ₹{top_decline.get('difference', 0):,}.",
-                })
-
-        # Check anomalies
-        if anomalies:
-            top_anom = anomalies[0]
-            causes.append({
-                "issue": top_anom.get("title", "Process Anomaly"),
-                "probable_cause": f"Unusual variance in {top_anom.get('metric', 'operations')} caused by unexpected machine downtime or sudden demand fluctuations.",
-                "evidence": top_anom.get("description", ""),
-            })
-
-        # Check efficiency / defect rate
-        if kpis.get("defect_rate", 0) > 2.5:
-            causes.append({
-                "issue": f"Elevated Defect Rate ({kpis.get('defect_rate')}%)",
-                "probable_cause": "Tool wear or calibration drift in the primary production cell leading to out-of-tolerance parts.",
-                "evidence": f"Defect rate is {kpis.get('defect_rate')}% compared to target of < 2.0%.",
-            })
-
-        if not causes:
-            causes.append({
-                "issue": "General Operations",
-                "probable_cause": "Manufacturing throughput and sales velocity are operating within standard parameters with no critical bottlenecks.",
-                "evidence": "All core KPIs meet baseline targets.",
-            })
-
-        return {
-            "primary_cause": causes[0]["probable_cause"],
-            "all_causes": causes,
-        }
+        return " ".join(parts) if parts else "Dataset analysis is ready."
 
     def answer_question(
         self,
         question: str,
         kpis: dict,
-        anomalies: list,
-        recommendations: list,
+        anomalies: list = None,
+        recommendations: list = None,
         sales_declines: list = None,
         forecast_data: dict = None,
         inventory_data: list = None,
+        dataset_meta: dict = None,
     ) -> str:
-        """Answer business and manufacturing operational questions with a structured 4-part response."""
         q = question.lower().strip()
+        kpis = kpis or {}
+        anomalies = anomalies or []
+        recommendations = recommendations or []
         sales_declines = sales_declines or []
         forecast_data = forecast_data or {}
         inventory_data = inventory_data or []
+        dataset_meta = dataset_meta or {}
 
-        # Target operational manufacturing question: "What should we manufacture next month?"
-        if any(w in q for w in ["manufacture", "produce", "production schedule", "next month", "make next month"]):
-            top_product = "Product A"
-            predicted_demand = 12500
-            trend_pct = 18
-
+        if any(w in q for w in ["manufacture", "what should we manufacture", "what should i produce", "produce next month", "production schedule", "what to produce"]):
             if forecast_data and forecast_data.get("product_forecasts"):
-                top_item = forecast_data["product_forecasts"][0]
-                top_product = top_item.get("product", "Product A")
-                predicted_demand = top_item.get("predicted_demand", 12500)
-                trend_pct = int(top_item.get("share_percentage", 18))
-
-            rev_est = forecast_data.get("expected_revenue", kpis.get("revenue", 850000))
-            rev_label = f"₹{int(rev_est / 100000)}L" if rev_est >= 100000 else f"₹{int(rev_est):,}"
-
+                top = forecast_data["product_forecasts"][0]
+                item_name = top.get("product", "the primary product line")
+                qty = top.get("predicted_demand", 0)
+                return (
+                    "**Analysis**: The current pattern suggests your next manufacturing plan should prioritize "
+                    f"{item_name} with an expected production demand of {qty:,} units. "
+                    "**Recommendation**: align production schedules to satisfy forecasted demand while keeping safety stock stable. "
+                    "**Suggested Action**: review capacity, materials, and staffing before the next production cycle."
+                )
             return (
-                f"Based on the sales forecast and current inventory, you should increase production of {top_product} next month.\n\n"
-                f"1. **Analysis**:\n"
-                f"Forecast models project total next-month demand at approximately {predicted_demand:,} units with expected revenue of {rev_label}. "
-                f"{top_product} represents the highest demand share ({trend_pct}% of total projected volume).\n\n"
-                f"2. **Probable Cause**:\n"
-                f"Demand is expected to increase by approximately {trend_pct}%, while current inventory levels are approaching the reorder threshold. "
-                f"Maintaining current production rates risks widespread stockouts and unfulfilled customer orders.\n\n"
-                f"3. **Recommendation**:\n"
-                f"Scale production capacity for {top_product} by 15-20% starting next week. Rebalance line shifts away from slow-moving inventory to prioritize high-velocity SKUs.\n\n"
-                f"4. **Suggested Action**:\n"
-                f"Issue raw material replenishment orders to suppliers today, schedule a Saturday maintenance window to ensure 95%+ uptime, and assign two dedicated assembly teams to {top_product}."
+                "**Analysis**: There is not enough reliable production history to recommend a specific manufacturing plan. "
+                "**Recommendation**: upload a dataset with date, product, and quantity information before asking for a manufacturing plan. "
+                "**Suggested Action**: add the relevant sales or production data and rerun the forecast."
             )
 
-        # Questions about Sales Decline
-        if any(w in q for w in ["decline", "sales drop", "decreasing", "drop in sales"]):
+        # 1. Total Sales / Revenue question
+        if any(w in q for w in ["total sales", "what are my total sales", "total revenue", "revenue", "how much sales"]):
+            if "revenue" in kpis and kpis["revenue"] > 0:
+                rev = kpis["revenue"]
+                rev_fmt = f"₹{rev / 100000:.2f} Lakhs" if rev >= 100000 else f"₹{rev:,.2f}"
+                orders = kpis.get("orders", kpis.get("total_records", "multiple"))
+                return (
+                    f"**Total Sales Overview**:\n\n"
+                    f"• **Calculated Total**: **{rev_fmt}** (exact value: ₹{rev:,.2f})\n"
+                    f"• **Transactions / Records**: {orders}\n"
+                    f"• **Data Source**: Uploaded dataset calculations\n\n"
+                    f"This total is derived directly by summing actual record amounts from your uploaded file."
+                )
+            elif "total_sales" in kpis:
+                return f"Total sales calculated from your dataset is **{kpis['total_sales']}**."
+            else:
+                return "The uploaded dataset does not contain a sales or revenue column."
+
+        # 2. Highest Selling Product / Top Performer
+        if any(w in q for w in ["highest sales", "top product", "best seller", "highest selling", "best selling"]):
+            prod_perf = kpis.get("product_performance", [])
+            if prod_perf:
+                top = prod_perf[0]
+                val_str = f"₹{top['revenue'] / 100000:.2f}L" if top.get("revenue", 0) >= 100000 else f"₹{top.get('revenue', top.get('units', 0)):,.2f}"
+                return (
+                    f"**Top Performing Product**:\n\n"
+                    f"• **Product**: **{top['name']}**\n"
+                    f"• **Total Contribution**: {val_str} ({top.get('share', 0)}% of total volume)\n"
+                    f"• **Total Units**: {top.get('units', 'N/A')}\n\n"
+                    f"Based on actual aggregated records in your uploaded dataset."
+                )
+            return "The uploaded dataset does not contain identifiable product or sales category columns."
+
+        # 3. Sales Trend / Trend over time
+        if any(w in q for w in ["trend", "sales trend", "trajectory", "over time", "timeline"]):
+            trend = kpis.get("trend", [])
+            labels = kpis.get("trend_labels", [])
+            if trend and len(trend) >= 2:
+                start_val = trend[0]
+                end_val = trend[-1]
+                direction = "increasing" if end_val > start_val else "decreasing" if end_val < start_val else "stable"
+                return (
+                    f"**Sales Trend Analysis**:\n\n"
+                    f"• **Direction**: Overall trajectory is **{direction}** across the recorded timeline.\n"
+                    f"• **Timeline Span**: {labels[0] if labels else 'Period Start'} to {labels[-1] if labels else 'Period End'}\n"
+                    f"• **First Period**: {start_val}\n"
+                    f"• **Most Recent Period**: {end_val}\n\n"
+                    f"You can view the interactive zoomable line chart in the Overview tab."
+                )
+            return "Not enough historical timeline data in the dataset to calculate a chronological trend curve."
+
+        # 4. Why Did Sales Decrease / Sales Decline
+        if any(w in q for w in ["why did sales decrease", "sales decrease", "drop in sales", "sales drop", "decline"]):
             if sales_declines:
                 top_dec = sales_declines[0]
+                p_name = top_dec.get("product", "Product")
+                pct = top_dec.get("decline_percentage", 0)
+                prev = top_dec.get("previous_sales", 0)
+                curr = top_dec.get("current_sales", 0)
                 return (
                     f"**Sales Decline Analysis**:\n\n"
-                    f"1. **Analysis**: {top_dec.get('product', 'Product')} sales dropped by {top_dec.get('decline_percentage')}% "
-                    f"(previous: ₹{int(top_dec.get('previous_sales', 0)):,}, current: ₹{int(top_dec.get('current_sales', 0)):,}).\n\n"
-                    f"2. **Probable Cause**: Reduced inventory availability at regional distribution hubs created fulfillment delays.\n\n"
-                    f"3. **Recommendation**: Conduct targeted promotions in East & North regions and expedite stock replenishment.\n\n"
-                    f"4. **Suggested Action**: Coordinate with regional distributors to clear backlogged orders."
+                    f"• **Affected Item**: **{p_name}**\n"
+                    f"• **Observed Drop**: **-{pct}%** (decreased from ₹{prev:,.2f} to ₹{curr:,.2f})\n"
+                    f"• **Root Cause**: Possible cause cannot be determined solely from historical sales data. "
+                    f"Review inventory availability, regional distributor channels, and local demand changes.\n"
+                    f"• **Action**: Evaluate pricing competitiveness and verify if stock was available to fulfill orders."
                 )
-            return "No significant sales declines detected in the current period. Overall revenue trajectory is positive."
+            return "No significant sales declines were detected across product categories in the active dataset."
 
-        # Questions about Revenue / Sales
-        if any(w in q for w in ["revenue", "sales", "income", "turnover"]):
-            revenue = kpis.get("revenue", 0)
-            rev_label = f"₹{int(revenue / 100000)}L" if revenue >= 100000 else f"₹{int(revenue):,}"
-            return (
-                f"Current revenue is {rev_label} across {kpis.get('orders', 0)} completed transactions. "
-                f"Next month's projected revenue is ₹{(kpis.get('forecast_next_month', revenue * 1.08) / 100000):.1f}L. "
-                f"Would you like recommendations on boosting product line profitability?"
-            )
-
-        # Questions about Inventory / Stock
-        if any(w in q for w in ["inventory", "stock", "warehouse", "reorder"]):
-            inv = kpis.get("inventory", 0)
-            status = "critically low" if inv < 5000 else "low" if inv < 10000 else "healthy"
-            return (
-                f"Total inventory on hand is {inv:,} units ({status}). "
-                f"{'⚠ Immediate purchase orders should be placed for items below minimum safety stock.' if inv < 10000 else 'Stock buffers are sufficient for current run rates.'}"
-            )
-
-        # Questions about Anomalies
-        if any(w in q for w in ["anomal", "unusual", "outlier", "spike", "defect"]):
-            if anomalies:
-                return f"Isolation Forest detected {len(anomalies)} anomalies. {self.generate_anomaly_insights(anomalies, kpis.get('total_records', 100))}"
-            return "No statistically significant anomalies detected in recent telemetry."
-
-        # Questions about Recommendations / Action plan
-        if any(w in q for w in ["recommend", "suggest", "improve", "action", "plan", "priority"]):
-            if recommendations:
-                top_rec = recommendations[0]
+        # 5. Inventory / Reorder Level Question
+        if any(w in q for w in ["inventory", "reorder level", "stock", "low stock", "below reorder"]):
+            if inventory_data and any(item.get("low_stock") for item in inventory_data):
+                low_items = [i for i in inventory_data if i.get("low_stock")]
+                item_lines = "\n".join([f"• **{i.get('product')}**: Stock = {i.get('stock_available')}, Reorder Level = {i.get('reorder_level')}" for i in low_items[:5]])
                 return (
-                    f"**Top Business Recommendation**:\n\n"
-                    f"• **Title**: {top_rec.get('title')}\n"
-                    f"• **Impact**: {top_rec.get('description')}\n"
-                    f"• **Expected Improvement**: {top_rec.get('potential_gain', '10-20%')}\n"
-                    f"• **Next Step**: {top_rec.get('suggested_action', 'Execute prioritized tasks.')}"
+                    f"**Low Stock & Reorder Alert**:\n\n"
+                    f"The following items are at or below their designated safety reorder threshold:\n\n"
+                    f"{item_lines}\n\n"
+                    f"**Action**: Place replenishment purchase orders immediately to avoid stockouts."
                 )
-            return "All operational parameters are currently within target thresholds."
+            elif kpis.get("inventory") is None and not inventory_data:
+                return "The uploaded dataset does not contain inventory or stock columns (such as Current_Stock or Reorder_Level)."
+            else:
+                return "All inventory items are currently above designated safety reorder levels."
 
-        if any(w in q for w in ["summary", "overview", "status", "health"]):
-            return self.generate_kpi_summary(kpis)
+        # 6. What Should I Produce Next Month / Manufacturing Schedule
+        if any(w in q for w in ["what should i produce", "produce next month", "manufacture", "production schedule", "what to produce"]):
+            if forecast_data and forecast_data.get("product_forecasts"):
+                top_forecast = forecast_data["product_forecasts"][0]
+                p_name = top_forecast.get("product", "Primary Product")
+                pred_qty = top_forecast.get("predicted_demand", 0)
+                pred_rev = top_forecast.get("predicted_revenue", 0)
+                return (
+                    f"**Next-Month Production Guidance**:\n\n"
+                    f"1. **Analysis**:\n"
+                    f"Forecasting models project highest demand for **{p_name}** with predicted demand of **{pred_qty:,} units** "
+                    f"(expected revenue of ₹{pred_rev:,.2f}, representing {top_forecast.get('share_percentage')}% of projected volume).\n\n"
+                    f"2. **Recommendation**:\n"
+                    f"Align production schedules to prioritize {p_name} to meet anticipated demand without bottlenecking other lines.\n\n"
+                    f"3. **Limitations**:\n"
+                    f"{forecast_data.get('model_limitations', 'Projections assume normal baseline demand patterns.')}"
+                )
+            elif "production" in kpis and kpis["production"] > 0:
+                return (
+                    f"Current production volume is {kpis['production']:,} units. "
+                    f"To generate detailed product-level forecasts, upload a dataset with historical Date, Product, and Quantity columns."
+                )
+            else:
+                return (
+                    "The uploaded dataset does not contain sufficient chronological production or sales records to project future production schedules. "
+                    "Upload a dataset with historical dates and quantities in Quality & Cleaning."
+                )
 
+        # 7. Data Quality Score
+        if any(w in q for w in ["data quality", "quality score", "how clean is my data", "null percentage"]):
+            score = kpis.get("quality_score", 95.0)
+            return (
+                f"**Dataset Quality Evaluation**:\n\n"
+                f"• **Overall Quality Score**: **{score}% / 100%**\n"
+                f"• **Scoring Formula**: `100 - (Null Ratio × 40 + Duplicate Ratio × 30 + Outlier Ratio × 30)`\n"
+                f"• **Status**: {'Excellent data integrity' if score >= 90 else 'Moderate quality - automatic cleaning applied' if score >= 75 else 'Needs attention'}\n\n"
+                f"Automatic cleaning removed duplicate records and handled missing values without altering significant values."
+            )
+
+        # 8. Business Risks & Alerts
+        if any(w in q for w in ["risk", "risks", "alerts", "main risks", "issues", "problems"]):
+            alerts = kpis.get("alerts", [])
+            if alerts:
+                alert_text = "\n".join([f"• {a}" for a in alerts[:4]])
+                return (
+                    f"**Identified Business & Operational Risks**:\n\n"
+                    f"{alert_text}\n\n"
+                    f"Review the Alerts & Causes tab for specific comparative figures and recommended mitigation actions."
+                )
+            return "No critical business risks or anomalous threshold violations were detected in the uploaded dataset."
+
+        # 9. Generic or Unknown Column Question
+        col_keywords = ["employee", "salary", "warehouse", "patient", "admission", "temperature", "voltage", "cost", "profit"]
+        for kw in col_keywords:
+            if kw in q:
+                # check if keyword is in columns
+                matched = any(kw in str(c).lower() for c in kpis.get("columns", []))
+                if not matched:
+                    return f"The uploaded dataset does not contain {kw} information."
+
+        # Default helpful contextual response
+        summary = self.generate_kpi_summary(kpis)
         return (
-            "I can answer operational questions across revenue trends, sales decline, next-month manufacturing schedules, "
-            "anomaly detection, and inventory reordering. Try asking: **'What should we manufacture next month?'**"
+            f"**InsightForge AI Assistant**:\n\n"
+            f"{summary}\n\n"
+            f"You can ask me questions such as:\n"
+            f"• *'What are my total sales?'*\n"
+            f"• *'Which product has the highest sales?'*\n"
+            f"• *'What is the data quality score?'*\n"
+            f"• *'What are the main business risks?'*\n"
+            f"• *'Why did sales decrease?'*"
         )
-
