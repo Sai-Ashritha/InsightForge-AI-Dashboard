@@ -1,10 +1,10 @@
 import { Bot, Send, Sparkles, Cpu } from 'lucide-react'
 
 const PROMPT_SUGGESTIONS = [
-  'What should we manufacture next month?',
-  'Why did sales decline in recent periods?',
-  'Which products are below the reorder level?',
-  'Explain detected process anomalies',
+  'Summarize this dataset',
+  'Which fields show a trend?',
+  'What anomalies were detected?',
+  'What actions does the data support?',
 ]
 
 function ChatDrawer({
@@ -60,7 +60,7 @@ function ChatDrawer({
         </div>
         {provider && (
           <span className="provider-pill">
-            <Cpu size={12} /> {provider === 'ollama' ? 'Ollama Llama-3.2' : provider === 'gemini' ? 'Gemini 1.5 Pro' : 'Manufacturing Engine'}
+            <Cpu size={12} /> {provider === 'ollama' ? 'Ollama Llama-3.2' : provider === 'gemini' ? 'Gemini 1.5 Pro' : 'InsightForge Engine'}
           </span>
         )}
       </div>
@@ -88,12 +88,12 @@ function ChatDrawer({
         <div className="chat-messages">
           {messages.length === 0 ? (
             <div className="chat-welcome glass-card">
-              <p className="welcome-headline">👋 AI Manufacturing Operations Advisor</p>
+              <p className="welcome-headline">InsightForge AI Analyst</p>
               <p className="welcome-body">
-                I analyze your dataset, forecast demand, anomalies, and inventory telemetry in real-time.
+                I analyze the columns in your uploaded dataset and report only findings supported by its data.
               </p>
               <p className="welcome-cta">
-                Click <strong>"What should we manufacture next month?"</strong> above or type your own question below!
+                Choose a question above or ask for a summary, trend, anomaly, or recommendation.
               </p>
             </div>
           ) : (
@@ -149,7 +149,7 @@ function ChatDrawer({
           value={input}
           onChange={(e) => onInputChange(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Ask e.g. What should we manufacture next month?..."
+          placeholder="Ask about the uploaded dataset..."
           disabled={loading}
           aria-label="Ask a question"
         />

@@ -14,21 +14,23 @@ class InsightGenerator:
             return "No dataset analytics available. Please upload a dataset in Quality & Cleaning."
 
         parts = []
-        if "revenue" in kpis and kpis["revenue"] > 0:
-            rev = kpis["revenue"]
-            rev_label = f"₹{rev / 100000:.2f}L" if rev >= 100000 else f"₹{rev:,.2f}"
-            parts.append(f"Total revenue is {rev_label} across {kpis.get('orders', kpis.get('total_records', 0))} records.")
-        elif "total_records" in kpis:
-            parts.append(f"Dataset contains {kpis['total_records']} total records.")
+        if kpis.get("dataset_name"):
+            parts.append(f"Dataset: {kpis['dataset_name']}.")
+        if "total_records" in kpis:
+            parts.append(f"It contains {kpis['total_records']} records.")
+        if kpis.get("columns"):
+            parts.append(f"Columns: {', '.join(str(column) for column in kpis['columns'])}.")
 
-        if "defect_rate" in kpis and kpis.get("defect_rate", 0) > 0:
-            parts.append(f"Recorded defect rate is {kpis['defect_rate']}%.")
-
-        if "inventory" in kpis and kpis.get("inventory") is not None and kpis.get("inventory", 0) > 0:
-            parts.append(f"Current inventory stands at {kpis['inventory']:,} units.")
-
+        metadata_keys = {"dataset_name", "columns", "total_records", "quality_score"}
+        metric_parts = []
+        for key, value in kpis.items():
+            if key in metadata_keys or not isinstance(value, (int, float)):
+                continue
+            metric_parts.append(f"{key.replace('_', ' ')}: {value:,.2f}" if isinstance(value, float) else f"{key.replace('_', ' ')}: {value:,}")
+        if metric_parts:
+            parts.append("Computed metrics: " + "; ".join(metric_parts[:5]) + ".")
         if "quality_score" in kpis:
-            parts.append(f"Data quality score is {kpis['quality_score']}% (out of 100%).")
+            parts.append(f"Data quality score: {kpis['quality_score']}%.")
 
         return " ".join(parts) if parts else "Dataset analysis is ready."
 

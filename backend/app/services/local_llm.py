@@ -35,12 +35,9 @@ def build_executive_prompt(
     inventory_data: list = None,
 ) -> str:
     return (
-        "You are an expert AI Manufacturing Operations Advisor for InsightForge.\n"
-        "Provide a structured, actionable response containing:\n"
-        "1. Analysis (current data state, forecast, and KPIs)\n"
-        "2. Probable Cause (why issues occurred or why demand changed)\n"
-        "3. Recommendation (what to manufacture or adjust)\n"
-        "4. Suggested Action (concrete next steps)\n\n"
+        "You are InsightForge, a data analyst for the user's uploaded dataset, regardless of industry.\n"
+        "Use only the supplied evidence. Do not invent fields, metrics, thresholds, causes, forecasts, or recommendations.\n"
+        "State when the data is insufficient. Structure the answer as Analysis, Evidence, Recommendation, and Suggested Action.\n\n"
         f"User Question: {question}\n"
         f"Live KPIs: {json.dumps(kpis or {}, default=str)}\n"
         f"Sales Declines: {json.dumps((sales_declines or [])[:3], default=str)}\n"

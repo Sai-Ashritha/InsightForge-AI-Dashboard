@@ -45,6 +45,7 @@ def test_anomaly_detector_handles_empty_and_non_numeric_data():
 
 
 def test_forecast_endpoint_uses_sales_database(monkeypatch):
+    monkeypatch.setattr(forecast_route, "get_active_dataset", lambda: None)
     monkeypatch.setattr(
         forecast_route,
         "fetch_table",

@@ -6,7 +6,6 @@ import {
   Brain,
   ChevronLeft,
   ChevronRight,
-  Factory,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -87,12 +86,12 @@ function SidebarNav({ activeTab, onTabChange, authToken, currentUser, onSignOut,
         {/* Brand Header */}
         <div className="sidebar-brand">
           <div className="sidebar-logo">
-            <Factory size={20} />
+            <BarChart3 size={20} />
           </div>
           {!collapsed && (
             <div className="sidebar-brand-text">
               <span className="sidebar-brand-name">InsightForge</span>
-              <span className="sidebar-brand-sub">AI Manufacturing</span>
+              <span className="sidebar-brand-sub">Dataset Intelligence</span>
             </div>
           )}
           <button

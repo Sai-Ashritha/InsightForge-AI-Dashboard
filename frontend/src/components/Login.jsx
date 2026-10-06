@@ -3,7 +3,7 @@ import {
   LogIn,
   UserPlus,
   ShieldCheck,
-  Factory,
+  BarChart3,
   KeyRound,
   Mail,
   User,
@@ -77,10 +77,10 @@ function Login({
       <div className="login-card glass-panel">
         <div className="login-header">
           <div className="brand-badge">
-            <Factory size={26} className="brand-icon" />
+            <BarChart3 size={26} className="brand-icon" />
           </div>
           <h2>InsightForge AI</h2>
-          <p className="login-subtitle">Predictive Manufacturing Intelligence Platform</p>
+          <p className="login-subtitle">Dataset Intelligence Platform</p>
           <div className="step-indicator-pill">
             <ShieldCheck size={12} /> Secure Access Portal
           </div>

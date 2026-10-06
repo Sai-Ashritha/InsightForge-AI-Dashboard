@@ -11,25 +11,21 @@ from app.services.forecasting import train_and_forecast_dynamic
 router = APIRouter(prefix="/ml", tags=["machine-learning"])
 
 
+def _active_frame():
+    frame = get_active_dataset()
+    if frame is not None and not frame.empty:
+        return frame
+    rows = fetch_table("sales")
+    return pd.DataFrame(rows) if rows else pd.DataFrame()
+
+
 @router.get("/forecast")
 def ml_forecast(current_user=Depends(get_current_user)):
-    df = None
-    try:
-        rows = fetch_table("sales")
-        if rows:
-            df = pd.DataFrame(rows)
-    except Exception:
-        pass
-
-    if df is None or df.empty:
-        cached_df = get_active_dataset()
-        if cached_df is not None and not cached_df.empty:
-            df = cached_df
-
-    if df is None or df.empty:
+    df = _active_frame()
+    if df.empty:
         return {
             "has_forecast": False,
-            "message": "Not enough historical data for reliable forecasting. Please upload a dataset in Quality & Cleaning.",
+            "message": "Upload a dataset to generate predictive insights.",
             "forecast_data": [],
             "historical_actuals": [],
             "predicted_revenue": 0,
@@ -38,25 +34,19 @@ def ml_forecast(current_user=Depends(get_current_user)):
             "product_forecasts": [],
             "validation_metrics": {},
         }
-    return train_and_forecast_dynamic(df, forecast_horizon_days=30)
+    result = train_and_forecast_dynamic(df)
+    result.setdefault("predicted_revenue", 0)
+    result.setdefault("predicted_demand", 0)
+    result.setdefault("expected_revenue", result["predicted_revenue"])
+    result.setdefault("product_forecasts", [])
+    result.setdefault("validation_metrics", {})
+    return result
 
 
 @router.get("/anomalies")
 def ml_anomalies(current_user=Depends(get_current_user)):
-    df = None
-    try:
-        rows = fetch_table("sales")
-        if rows:
-            df = pd.DataFrame(rows)
-    except Exception:
-        pass
-
-    if df is None or df.empty:
-        cached_df = get_active_dataset()
-        if cached_df is not None and not cached_df.empty:
-            df = cached_df
-
-    if df is None or df.empty:
+    df = _active_frame()
+    if df.empty:
         return {
             "algorithm": "Isolation Forest",
             "anomalies": [],
@@ -75,59 +65,32 @@ def ml_anomalies(current_user=Depends(get_current_user)):
 
 @router.get("/sales-decline")
 def ml_sales_decline(current_user=Depends(get_current_user)):
-    df = None
-    try:
-        rows = fetch_table("sales")
-        if rows:
-            df = pd.DataFrame(rows)
-    except Exception:
-        pass
-
-    if df is None or df.empty:
-        cached_df = get_active_dataset()
-        if cached_df is not None and not cached_df.empty:
-            df = cached_df
-
-    if df is None or df.empty:
+    df = _active_frame()
+    if df.empty:
         return {"declining_products": [], "alerts": []}
     alerts_res = detect_real_alerts_and_causes(df)
     return {
         "declining_products": alerts_res.get("declining_products", []),
-        "alerts": [a["explanation"] for a in alerts_res.get("alerts", [])],
+        "alerts": [alert["explanation"] for alert in alerts_res.get("alerts", [])],
     }
 
 
 @router.get("/inventory")
 def inventory_status(current_user=Depends(get_current_user)):
-    df = None
-    try:
-        rows = fetch_table("inventory")
-        if rows:
-            df = pd.DataFrame(rows)
-    except Exception:
-        pass
-
-    if df is None or df.empty:
-        cached_df = get_active_dataset()
-        if cached_df is not None and not cached_df.empty:
-            df = cached_df
-
-    if df is None or df.empty:
+    df = _active_frame()
+    if df.empty:
         return {"has_inventory": False, "items": [], "low_stock_count": 0, "total_stock": 0, "alerts": []}
 
     schema = inspect_dataset_schema(df)
     numeric_cols = schema["numeric_cols"]
     categorical_cols = schema["categorical_cols"]
-
     stock_col = next((c for c in numeric_cols if any(k in str(c).lower() for k in ["stock_available", "current_stock", "stock", "on_hand", "inventory"])), None)
     reorder_col = next((c for c in numeric_cols if any(k in str(c).lower() for k in ["reorder_level", "min_stock", "safety_stock"])), None)
-    prod_col = categorical_cols[0] if categorical_cols else None
 
-    # If no stock column exists, do not fabricate synthetic stock
     if not stock_col:
         return {
             "has_inventory": False,
-            "message": "The uploaded dataset does not contain inventory or stock columns.",
+            "message": "The uploaded dataset does not contain an identifiable stock measure.",
             "items": [],
             "low_stock_count": 0,
             "total_stock": 0,
@@ -135,37 +98,48 @@ def inventory_status(current_user=Depends(get_current_user)):
         }
 
     frame = df.copy()
-    frame[stock_col] = pd.to_numeric(frame[stock_col], errors="coerce").fillna(0)
+    frame[stock_col] = pd.to_numeric(frame[stock_col], errors="coerce")
+    if not reorder_col:
+        return {
+            "has_inventory": True,
+            "message": "A stock measure is present, but no reorder threshold was supplied; low-stock status was not inferred.",
+            "items": [],
+            "low_stock_count": 0,
+            "total_stock": int(frame[stock_col].sum()),
+            "alerts": [],
+        }
+    frame[reorder_col] = pd.to_numeric(frame[reorder_col], errors="coerce")
+    valid_stock = frame.dropna(subset=[stock_col, reorder_col])
+    valid_stock = valid_stock[(valid_stock[stock_col] >= 0) & (valid_stock[reorder_col] >= 0)]
 
-    if reorder_col:
-        frame[reorder_col] = pd.to_numeric(frame[reorder_col], errors="coerce").fillna(0)
-    else:
-        # Benchmark median/quantile if no reorder level specified
-        frame["reorder_level"] = int(frame[stock_col].quantile(0.25))
-        reorder_col = "reorder_level"
+    label_candidates = []
+    for column in categorical_cols:
+        paired = valid_stock[[column, stock_col, reorder_col]].dropna(subset=[column])
+        unique_count = paired[column].nunique()
+        if len(paired) and unique_count > 1:
+            label_candidates.append((len(paired), unique_count, column))
+    category_col = max(label_candidates, default=(0, 0, None))[2]
 
-    frame["low_stock"] = frame[stock_col] <= frame[reorder_col]
     items = []
     alerts = []
-
-    for _, row in frame.iterrows():
-        p_name = str(row[prod_col]) if prod_col else f"SKU-{_ + 1}"
-        stk = int(row[stock_col])
-        reord = int(row[reorder_col])
-        is_low = stk <= reord
+    for index, row in valid_stock.iterrows():
+        stock = row[stock_col]
+        threshold = row[reorder_col]
+        label = str(row[category_col]) if category_col and pd.notna(row[category_col]) else f"Record {index + 1}"
+        low_stock = stock <= threshold
         items.append({
-            "product": p_name,
-            "stock_available": stk,
-            "reorder_level": reord,
-            "low_stock": is_low,
+            "product": label,
+            "stock_available": int(stock),
+            "reorder_level": int(threshold),
+            "low_stock": low_stock,
         })
-        if is_low:
-            alerts.append(f"⚠ Low Stock Alert: {p_name} is below the reorder level. Current Stock: {stk}, Reorder Level: {reord}")
+        if low_stock:
+            alerts.append(f"{label} is at or below the supplied stock threshold.")
 
     return {
         "has_inventory": True,
         "items": items[:50],
-        "low_stock_count": sum(1 for i in items if i["low_stock"]),
+        "low_stock_count": sum(item["low_stock"] for item in items),
         "total_stock": int(frame[stock_col].sum()),
         "alerts": alerts[:10],
     }

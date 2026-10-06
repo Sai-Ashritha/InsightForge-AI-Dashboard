@@ -7,7 +7,7 @@ const WORKFLOW_STEPS = [
   { id: 4, label: 'Data Quality', short: 'Quality' },
   { id: 5, label: 'Auto Cleaning', short: 'Clean' },
   { id: 6, label: 'Dashboard KPIs', short: 'Dashboard' },
-  { id: 7, label: 'Sales Decline', short: 'Decline' },
+  { id: 7, label: 'Metric Changes', short: 'Changes' },
   { id: 8, label: 'ML Forecast', short: 'Forecast' },
   { id: 9, label: 'Anomaly Detection', short: 'Anomalies' },
   { id: 10, label: 'Inventory Check', short: 'Inventory' },

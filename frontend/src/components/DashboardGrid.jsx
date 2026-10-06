@@ -1,67 +1,29 @@
-import { Factory, Gauge, Package, ShieldCheck, TrendingUp, Wallet } from 'lucide-react'
-
-const cards = [
-  {
-    key: 'revenue',
-    label: 'Total Revenue',
-    icon: Wallet,
-    color: 'emerald',
-    format: (value) => (value >= 100000 ? `₹${(value / 100000).toFixed(1)}L` : `₹${Number(value).toLocaleString()}`),
-    subtext: 'Calculated from uploaded dataset',
-  },
-  {
-    key: 'production',
-    label: 'Total Production',
-    icon: Factory,
-    color: 'blue',
-    format: (value) => `${Number(value).toLocaleString()} units`,
-    subtext: 'Fabricated output units',
-  },
-  {
-    key: 'inventory',
-    label: 'Current Inventory',
-    icon: Package,
-    color: 'amber',
-    format: (value) => `${Number(value).toLocaleString()} units`,
-    subtext: 'Floor & hub safety stock',
-  },
-  {
-    key: 'efficiency',
-    label: 'Production Efficiency',
-    icon: Gauge,
-    color: 'cyan',
-    format: (value) => `${value}%`,
-    subtext: 'Uptime vs downtime ratio',
-  },
-  {
-    key: 'quality_score',
-    label: 'Data Quality Score',
-    icon: ShieldCheck,
-    color: 'indigo',
-    format: (value) => `${value}%`,
-    subtext: 'Formula: 100 - (Null+Dup+Outliers)',
-  },
-]
+import { BarChart3, TrendingUp } from 'lucide-react'
 
 function DashboardGrid({ kpis }) {
+  const cards = kpis?.dynamic_analytics?.kpis || []
+
+  if (!cards.length) {
+    return <p className="empty-state">Upload a dataset to generate metrics.</p>
+  }
+
   return (
     <section className="kpi-grid" aria-label="Key performance indicators">
-      {cards.map(({ key, label, icon: Icon, color, format, subtext }) => {
-        const val = kpis?.[key] ?? (key === 'quality_score' ? 94.0 : 0)
+      {cards.map(({ key, title, value, color, unit, subtext }) => {
         return (
-          <div className={`kpi-card glass-card card-${color}`} key={key}>
+          <div className={`kpi-card glass-card card-${color || 'indigo'}`} key={key}>
             <div className="kpi-card-top">
               <div className="kpi-icon-wrapper">
-                <Icon size={18} aria-hidden="true" />
+                <BarChart3 size={18} aria-hidden="true" />
               </div>
-              <span className="kpi-label">{label}</span>
+              <span className="kpi-label">{title}</span>
             </div>
             <div className="kpi-value-row">
-              <strong className="kpi-value">{format(val)}</strong>
+              <strong className="kpi-value">{value}{unit && !String(value).includes(unit) ? ` ${unit}` : ''}</strong>
             </div>
             <div className="kpi-subtext">
               <TrendingUp size={12} className="kpi-sub-icon" />
-              <span>{subtext}</span>
+              <span>{subtext || 'Calculated from uploaded data'}</span>
             </div>
           </div>
         )

@@ -182,29 +182,6 @@ def detect_real_alerts_and_causes(df: pd.DataFrame) -> Dict[str, Any]:
                     "recommended_action": f"Issue purchase or replenishment order immediately for {p_name} to prevent stockout.",
                 })
 
-    # 4. Check Defect Rate (if defect columns exist)
-    defect_col = next((c for c in numeric_cols if any(k in str(c).lower() for k in ["defect", "defective_units", "scrap", "rejected"])), None)
-    qty_col = next((c for c in numeric_cols if any(k in str(c).lower() for k in ["units_produced", "production", "quantity"])), None)
-    if defect_col and qty_col:
-        tot_d = float(pd.to_numeric(df[defect_col], errors="coerce").sum())
-        tot_q = float(pd.to_numeric(df[qty_col], errors="coerce").sum())
-        if tot_q > 0:
-            d_rate = round((tot_d / tot_q * 100), 2)
-            if d_rate > 2.5:
-                alerts.append({
-                    "id": "alert_defect_elevated",
-                    "type": "defect_spike",
-                    "severity": "critical" if d_rate > 5.0 else "warning",
-                    "title": "Elevated Defect Rate",
-                    "product": "Production Quality",
-                    "actual_value": f"{d_rate}%",
-                    "comparison_value": "2.0% benchmark",
-                    "change_pct": round(((d_rate - 2.0) / 2.0) * 100, 1),
-                    "period": "Cumulative Dataset",
-                    "explanation": f"Defect rate is at {d_rate}% ({int(tot_d):,} defects across {int(tot_q):,} produced units), exceeding the 2.0% tolerance limit.",
-                    "recommended_action": "Inspect calibration and assembly inspection stages to isolate scrap causes.",
-                })
-
     # 5. Build Evidence-Based Root Cause Analysis (NO arbitrary percentages)
     if low_stock_items and declining_items:
         # Check if the same item is both low stock and declining
@@ -224,17 +201,6 @@ def detect_real_alerts_and_causes(df: pd.DataFrame) -> Dict[str, Any]:
                 "action": "Issue warehouse replenishment purchase orders.",
             })
 
-    if defect_col and qty_col:
-        tot_d = float(pd.to_numeric(df[defect_col], errors="coerce").sum())
-        tot_q = float(pd.to_numeric(df[qty_col], errors="coerce").sum())
-        if tot_q > 0 and (tot_d / tot_q * 100) > 2.5:
-            root_causes.append({
-                "title": "Manufacturing Defect Rate Friction",
-                "condition": f"Observed defect rate of {round(tot_d / tot_q * 100, 2)}% exceeds target threshold of 2.0%.",
-                "finding": "Scrap and rework volume is reducing net salable production yield.",
-                "action": "Implement quality gates and recalibrate fabrication equipment.",
-            })
-
     if declining_items and not root_causes:
         top_dec = declining_items[0]
         root_causes.append({
@@ -247,17 +213,17 @@ def detect_real_alerts_and_causes(df: pd.DataFrame) -> Dict[str, Any]:
     if not root_causes:
         if alerts:
             root_causes.append({
-                "title": "Operational Condition Summary",
-                "condition": f"{len(alerts)} alert condition(s) detected across quality and metric performance.",
-                "finding": "Metrics reflect active variance within operational parameters.",
-                "action": "Execute the recommended action listed under each alert.",
+                "title": "Dataset Finding Summary",
+                "condition": f"{len(alerts)} rule-based finding(s) were detected.",
+                "finding": "The available columns do not establish a single underlying cause.",
+                "action": "Review each finding against source context before acting.",
             })
         else:
             root_causes.append({
-                "title": "Stable Baseline Performance",
-                "condition": "No abnormal drops, inventory stockouts, or quality violations detected.",
-                "finding": "All evaluated metrics are operating within normal baseline boundaries.",
-                "action": "Continue regular monitoring and periodic data refreshes.",
+                "title": "No Root Cause Established",
+                "condition": "No supported root-cause rule matched the available dataset.",
+                "finding": "This does not establish that all metrics are normal; it means no cause was supported by the current rules and columns.",
+                "action": "Review the available metrics and add context-specific thresholds if needed.",
             })
 
     return {

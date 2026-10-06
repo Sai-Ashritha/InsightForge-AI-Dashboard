@@ -1,4 +1,5 @@
 import io
+import re
 from typing import List
 import numpy as np
 import pandas as pd
@@ -26,6 +27,68 @@ def get_dataframe_from_upload(file_name: str, content: bytes) -> pd.DataFrame:
     if lower_name.endswith(".json"):
         return pd.read_json(pd.io.common.BytesIO(content))
     raise ValueError("Unsupported file type. Use CSV, Excel, or JSON.")
+
+
+def _normalize_column_name(column_name: str) -> str:
+    return str(column_name).strip().lower().replace(" ", "_").replace("-", "_")
+
+
+def merge_uploaded_dataframes(dataframes: list[pd.DataFrame]) -> pd.DataFrame:
+    """Safely merge multiple uploaded dataframes when common keys are available; otherwise concatenate them."""
+    valid_frames = [df.copy() for df in dataframes if df is not None and not df.empty]
+    if not valid_frames:
+        return pd.DataFrame()
+    if len(valid_frames) == 1:
+        return valid_frames[0].copy()
+
+    normalized_frames = []
+    original_name_map = {}
+    for frame in valid_frames:
+        frame = frame.copy()
+        renamed = {}
+        for col in frame.columns:
+            normalized = _normalize_column_name(col)
+            renamed[col] = normalized
+            original_name_map.setdefault(normalized, str(col))
+        normalized_frames.append(frame.rename(columns=renamed))
+
+    shared_columns = set(normalized_frames[0].columns)
+    for frame in normalized_frames[1:]:
+        shared_columns.intersection_update(frame.columns)
+
+    join_candidates = []
+    for column in shared_columns:
+        if all(frame[column].dropna().is_unique for frame in normalized_frames):
+            value_sets = [set(frame[column].dropna().astype(str)) for frame in normalized_frames]
+            overlap = len(set.intersection(*value_sets)) if value_sets else 0
+            if overlap:
+                join_candidates.append((overlap, column))
+
+    join_key = max(join_candidates, default=(0, None))[1]
+
+    if join_key:
+        for frame in normalized_frames:
+            frame[join_key] = frame[join_key].astype("string")
+        merged = normalized_frames[0]
+        for frame in normalized_frames[1:]:
+            if join_key in merged.columns and join_key in frame.columns:
+                merged = merged.merge(frame, on=join_key, how="outer", suffixes=("_left", "_right"))
+            else:
+                merged = pd.concat([merged, frame], ignore_index=True, sort=False)
+    else:
+        merged = pd.concat(normalized_frames, ignore_index=True, sort=False)
+
+    rename_lookup = {}
+    for col in merged.columns:
+        base = re.sub(r"(_left|_right)$", "", col)
+        original = original_name_map.get(base, base)
+        if col.endswith("_left"):
+            rename_lookup[col] = f"{original} (left)"
+        elif col.endswith("_right"):
+            rename_lookup[col] = f"{original} (right)"
+        else:
+            rename_lookup[col] = original
+    return merged.rename(columns=rename_lookup).reset_index(drop=True)
 
 
 def analyze_and_clean_df(raw_df: pd.DataFrame, file_name: str):
@@ -195,9 +258,14 @@ async def upload_multiple_files(
     user_key = current_user.get("email", "default") if isinstance(current_user, dict) else getattr(current_user, "email", "default")
     if cleaned_dfs:
         try:
-            _CLEANED_CACHE[user_key] = pd.concat(cleaned_dfs, ignore_index=True)
+            frames_to_merge = cleaned_dfs
+            if append and user_key in _CLEANED_CACHE:
+                frames_to_merge = [_CLEANED_CACHE[user_key], *cleaned_dfs]
+            combined_df = merge_uploaded_dataframes(frames_to_merge)
+            _CLEANED_CACHE[user_key] = combined_df
         except Exception:
             _CLEANED_CACHE[user_key] = cleaned_dfs[0]
+            combined_df = cleaned_dfs[0]
         set_active_dataset(user_key, _CLEANED_CACHE[user_key], ", ".join(f["file_name"] for f in processed_files))
         set_active_dataset("default", _CLEANED_CACHE[user_key], ", ".join(f["file_name"] for f in processed_files))
 

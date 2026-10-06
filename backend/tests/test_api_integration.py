@@ -77,6 +77,7 @@ def test_ml_endpoints(monkeypatch):
         {"date": f"2026-01-{i:02d}", "product": "Product A", "revenue": 1000 + i * 50, "quantity": 10 + i}
         for i in range(1, 25)
     ]
+    monkeypatch.setattr(ml_route, "get_active_dataset", lambda: None)
     monkeypatch.setattr(ml_route, "fetch_table", lambda t: fake_sales if t == "sales" else [])
 
     # Test ML Forecast

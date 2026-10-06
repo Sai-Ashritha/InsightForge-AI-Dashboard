@@ -6,7 +6,7 @@ from fastapi import APIRouter, Query
 from app.database.db import fetch_table
 from app.services.alert_engine import detect_real_alerts_and_causes
 from app.services.data_quality import assess_data_quality
-from app.services.dynamic_engine import compute_dynamic_analytics, get_active_dataset
+from app.services.dynamic_engine import compute_dynamic_analytics, get_active_dataset, inspect_dataset_schema
 from app.services.sales_decline import detect_sales_declines
 
 router = APIRouter()
@@ -108,11 +108,14 @@ def get_dashboard():
         stock_col = next((c for c in active_df.columns if any(k in str(c).lower() for k in ["current_stock", "stock_available", "inventory", "stock", "on_hand"])) , None)
         inventory_units = int(pd.to_numeric(active_df[stock_col], errors="coerce").sum()) if stock_col else 0
 
-        defect_col = next((c for c in active_df.columns if any(k in str(c).lower() for k in ["defects", "defective_units", "scrap", "rejected", "expense", "cost"])) , None)
+        defect_col = next((c for c in active_df.columns if any(k in str(c).lower() for k in ["defect", "scrap", "rejected"]) and not any(k in str(c).lower() for k in ["rate", "percent", "ratio", "cost", "expense"])) , None)
         defect_rate = 0.0
         if defect_col and qty_col and production_units > 0:
-            tot_def = float(pd.to_numeric(active_df[defect_col], errors="coerce").sum())
-            defect_rate = round(float(tot_def / production_units * 100), 2)
+            paired_counts = active_df[[defect_col, qty_col]].apply(pd.to_numeric, errors="coerce").dropna()
+            matched_quantity = float(paired_counts[qty_col].sum()) if not paired_counts.empty else 0.0
+            matched_defects = float(paired_counts[defect_col].sum()) if not paired_counts.empty else 0.0
+            if matched_quantity > 0 and 0 <= matched_defects <= matched_quantity:
+                defect_rate = round(matched_defects / matched_quantity * 100, 2)
 
         quality_score = quality_res.get("quality_score", 0.0)
         date_col = next((c for c in active_df.columns if pd.api.types.is_datetime64_any_dtype(active_df[c]) or any(k in str(c).lower() for k in ["date", "time", "day"])) , None)
@@ -147,6 +150,36 @@ def get_dashboard():
 
         forecast_value = round(float(revenue), 2) if revenue > 0 else 0.0
 
+        inventory_status = []
+        if stock_col:
+            stock_frame = active_df.copy()
+            stock_frame[stock_col] = pd.to_numeric(stock_frame[stock_col], errors="coerce")
+            valid_stock = stock_frame.dropna(subset=[stock_col])
+            valid_stock = valid_stock[valid_stock[stock_col] >= 0]
+            category_candidates = []
+            categorical_columns = inspect_dataset_schema(active_df)["categorical_cols"]
+            for column in categorical_columns:
+                paired = valid_stock[[column, stock_col]].dropna()
+                unique_count = paired[column].nunique()
+                if len(paired) >= 2 and 2 <= unique_count <= 200:
+                    category_candidates.append((len(paired), unique_count, column, paired))
+
+            if category_candidates:
+                _, _, stock_category, paired_stock = max(category_candidates, key=lambda item: (item[0], item[1]))
+                grouped_stock = paired_stock.groupby(stock_category)[stock_col].sum().sort_values(ascending=False).head(8)
+                maximum_stock = float(grouped_stock.max()) if not grouped_stock.empty else 0.0
+                inventory_status = [
+                    {
+                        "name": str(name),
+                        "units": int(value),
+                        "value": round(float(value) / maximum_stock * 100) if maximum_stock > 0 else 0,
+                    }
+                    for name, value in grouped_stock.items()
+                ]
+            elif not valid_stock.empty:
+                stock_total = float(valid_stock[stock_col].sum())
+                inventory_status = [{"name": "All records", "units": int(stock_total), "value": 100 if stock_total > 0 else 0}]
+
         return {
             "status": "success",
             "data_source": "active_dataset",
@@ -162,10 +195,7 @@ def get_dashboard():
             "trend_labels": trend_labels,
             "production_trend": trend,
             "product_performance": product_performance,
-            "inventory_status": [
-                {"name": p["name"], "value": min(100, int(p["share"] * 2.5)), "units": p.get("units", 0)}
-                for p in product_performance[:5]
-            ] if stock_col else [],
+            "inventory_status": inventory_status,
             "sales_declines": alerts_res.get("declining_products", []),
             "alerts": [a["explanation"] for a in alerts_res.get("alerts", [])],
             "dynamic_analytics": dynamic_result,

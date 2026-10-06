@@ -7,7 +7,6 @@ import {
   CheckCircle2,
   Cpu,
   Download,
-  Factory,
   FileSpreadsheet,
   FileText,
   Flame,
@@ -99,6 +98,7 @@ function App() {
   const [anomaliesData, setAnomaliesData]       = useState(null)
   const [inventoryData, setInventoryData]       = useState(null)
   const [salesDeclineData, setSalesDeclineData] = useState(null)
+  const [alertsData, setAlertsData] = useState(null)
   const [recommendationsData, setRecommendationsData] = useState(null)
 
   // Chat State
@@ -162,6 +162,11 @@ function App() {
       .then((res) => res.json())
       .then((data) => setRecommendationsData(data))
       .catch((err) => console.error('Recommendations fetch error', err))
+
+    fetch(`${API_BASE}/alerts-and-causes`)
+      .then((res) => res.json())
+      .then((data) => setAlertsData(data))
+      .catch((err) => console.error('Dataset alerts fetch error', err))
   }, [authToken])
 
   // Verify Session on Startup
@@ -482,7 +487,7 @@ function App() {
           role: 'ai',
           content:
             'The assistant could not generate a response from the active dataset because the upload or analytics context is unavailable.\n\n' +
-            'Please upload a CSV, Excel, or JSON dataset, then ask a question such as: total sales, top product, data quality, or a trend summary.\n\n' +
+            'Please upload a CSV, Excel, or JSON dataset, then ask for a summary, trend, data-quality review, or anomaly check.\n\n' +
             'If the requested field is not present in the uploaded file, the answer will state that the dataset does not contain that information.',
         },
       ])
@@ -497,10 +502,7 @@ function App() {
   const decliningProducts    = salesDeclineData?.declining_products || kpis?.sales_declines || []
   const recommendationsList  = recommendationsData?.recommendations || []
 
-  // Check which business domains are present in dataset
-  const hasSalesData = !!(kpis.revenue || kpis.orders || (kpis.product_performance && kpis.product_performance.length > 0))
-  const hasProductionData = !!(kpis.production || (kpis.production_trend && kpis.production_trend.length > 0))
-  const hasInventoryData = !!(kpis.inventory || (kpis.inventory_status && kpis.inventory_status.length > 0))
+  const dynamicCharts = kpis?.dynamic_analytics?.charts || []
 
   return (
     <div className="app-layout">
@@ -521,7 +523,7 @@ function App() {
         {/* Topbar */}
         <header className="topbar">
           <div className="topbar-left">
-            <p className="topbar-eyebrow">Enterprise Manufacturing Intelligence</p>
+            <p className="topbar-eyebrow">Dataset Intelligence</p>
             <h1>InsightForge AI Predictive Dashboard</h1>
           </div>
           <div className="topbar-right">
@@ -595,10 +597,10 @@ function App() {
                 <div className="glass-panel upload-flow-card">
                   <div className="panel-header-badge">
                     <p className="section-kicker">Data Ingestion</p>
-                    <h2>Upload Manufacturing Data</h2>
+                    <h2>Upload a Dataset</h2>
                   </div>
                   <p className="step-desc">
-                    Upload single or multiple datasets (e.g. <code>sales.csv</code>, <code>production.csv</code>, <code>inventory.csv</code>, or <code>employees.csv</code>) to automatically trigger quality profiling, intelligent cleaning, and AI predictive models.
+                    Upload one or more CSV, Excel, or JSON files to profile, clean, combine, and analyze the available data.
                   </p>
 
                   <div className="drag-drop-zone glass-card">
@@ -608,7 +610,7 @@ function App() {
                         ? <strong>Selected: {files.length} dataset{files.length > 1 ? 's' : ''}</strong>
                         : 'Drag & drop single or multiple CSV / Excel / JSON files here'}
                     </p>
-                    <p className="drag-subtitle">Supports multiple files simultaneously (e.g. Sales, Production, Inventory, Employees)</p>
+                    <p className="drag-subtitle">Multiple files can be analyzed together when their columns support a reliable join.</p>
                     
                     {/* Hidden input — accumulates files */}
                     <input
@@ -725,7 +727,7 @@ function App() {
                       <Sparkles size={16} className="text-amber" />
                       <div>
                         <strong>Quick Test with Sample Data</strong>
-                        <p>Instantly load pre-configured <code>sales.csv</code> manufacturing data</p>
+                        <p>Load a small example dataset to preview the analysis flow</p>
                       </div>
                     </div>
                     <button
@@ -734,7 +736,7 @@ function App() {
                       onClick={handleLoadSampleSales}
                       disabled={uploading}
                     >
-                      Load <code>sales.csv</code>
+                      Load Example
                     </button>
                   </div>
                 </div>
@@ -818,25 +820,25 @@ function App() {
 
                         <div className="quality-breakdown-row" style={{ marginTop: '12px' }}>
                           <div className="quality-score-circle">
-                            <span className="score-num">{uploadResult?.data_quality?.quality_score ?? 94}</span>
+                            <span className="score-num">{uploadResult?.data_quality?.quality_score ?? '—'}</span>
                             <span className="score-lbl">/ 100</span>
                           </div>
                           <div className="quality-factors-list">
                             <div className="factor-item">
                               <span>Total Records:</span>
-                              <strong>{Number(uploadResult?.raw_analysis?.rows ?? 150).toLocaleString()}</strong>
+                              <strong>{Number(uploadResult?.raw_analysis?.rows ?? 0).toLocaleString()}</strong>
                             </div>
                             <div className="factor-item">
                               <span>Missing Values:</span>
-                              <strong>{uploadResult?.data_quality?.null_percentage ?? 2.4}%</strong>
+                              <strong>{uploadResult?.data_quality?.null_percentage ?? '—'}{uploadResult?.data_quality?.null_percentage != null ? '%' : ''}</strong>
                             </div>
                             <div className="factor-item">
                               <span>Duplicate Rows:</span>
-                              <strong>{uploadResult?.data_quality?.duplicate_percentage ?? 1.2}%</strong>
+                              <strong>{uploadResult?.data_quality?.duplicate_percentage ?? '—'}{uploadResult?.data_quality?.duplicate_percentage != null ? '%' : ''}</strong>
                             </div>
                             <div className="factor-item">
-                              <span>Outliers Detected:</span>
-                              <strong>{uploadResult?.raw_analysis?.duplicate_records ?? 0}</strong>
+                              <span>Outlier Rate:</span>
+                              <strong>{uploadResult?.data_quality?.outlier_percentage ?? '—'}{uploadResult?.data_quality?.outlier_percentage != null ? '%' : ''}</strong>
                             </div>
                           </div>
                         </div>
@@ -858,11 +860,11 @@ function App() {
                         <div className="metrics-pill-grid" style={{ marginTop: '12px', marginBottom: '14px' }}>
                           <div className="metric-pill">
                             <span>Original Records</span>
-                            <strong>{Number(uploadResult?.raw_analysis?.rows ?? 150).toLocaleString()}</strong>
+                            <strong>{Number(uploadResult?.raw_analysis?.rows ?? 0).toLocaleString()}</strong>
                           </div>
                           <div className="metric-pill">
                             <span>Clean Records</span>
-                            <strong className="text-emerald">{Number(uploadResult?.cleaning_summary?.cleaned_rows ?? uploadResult?.raw_analysis?.rows ?? 150).toLocaleString()}</strong>
+                            <strong className="text-emerald">{Number(uploadResult?.cleaning_summary?.cleaned_rows ?? uploadResult?.raw_analysis?.rows ?? 0).toLocaleString()}</strong>
                           </div>
                           <div className="metric-pill">
                             <span>Removed Duplicates</span>
@@ -962,7 +964,7 @@ function App() {
               <div className="section-heading-row">
                 <div>
                   <p className="section-kicker">Live Telemetry</p>
-                  <h2>Dynamic Manufacturing Intelligence</h2>
+                  <h2>Dataset Overview</h2>
                 </div>
                 <button
                   type="button"
@@ -977,171 +979,52 @@ function App() {
               <DashboardGrid kpis={kpis} />
             </section>
 
-            {/* Dynamic Visualizations Row */}
             <section className="charts-2col-grid" id="charts">
-              {/* 1. Sales Trend */}
-              {hasSalesData && (
-                <div className="glass-panel chart-panel">
-                  <div className="panel-heading-row">
-                    <div>
-                      <p className="section-kicker">Revenue Velocity</p>
-                      <h3>Sales Trend &amp; Monthly Revenue</h3>
-                    </div>
-                    <span className="period-badge">Real-time</span>
-                  </div>
-                  <div className="plot-container">
-                    <Plot
-                      data={[
-                        {
-                          x: kpis.trend_labels || ['P1','P2','P3','P4','P5','P6','P7','P8','P9','P10'],
-                          y: kpis.trend || [45,48,52,55,58,61,65,68,72,75],
-                          type: 'scatter',
-                          mode: 'lines+markers',
-                          name: 'Sales Revenue (₹ Lakhs)',
-                          line: { color: '#10b981', width: 3, shape: 'spline' },
-                          marker: { color: '#059669', size: 7 },
-                          fill: 'tozeroy',
-                          fillcolor: 'rgba(16,185,129,0.10)',
-                        },
-                      ]}
-                      layout={{
-                        autosize: true,
-                        margin: { t: 15, r: 15, b: 35, l: 45 },
-                        paper_bgcolor: 'rgba(0,0,0,0)',
-                        plot_bgcolor: 'rgba(0,0,0,0)',
-                        font: { color: '#94a3b8', size: 11, family: 'Inter' },
-                        xaxis: { gridcolor: 'rgba(255,255,255,0.05)', color: '#64748b' },
-                        yaxis: { gridcolor: 'rgba(255,255,255,0.05)', tickprefix: '₹', color: '#64748b' },
-                        showlegend: false,
-                      }}
-                      useResizeHandler
-                      className="responsive-plot"
-                      config={{ responsive: true, displayModeBar: false }}
-                    />
-                  </div>
-                </div>
-              )}
+              {dynamicCharts.map((chart) => {
+                const chartType = chart.chart_type === 'line' || chart.chart_type === 'scatter'
+                  ? 'scatter'
+                  : chart.chart_type
+                const plotData = chartType === 'pie'
+                  ? [{ labels: chart.labels || [], values: chart.values || [], type: 'pie', hole: 0.42 }]
+                  : [{
+                      x: chart.x || [],
+                      y: chart.y || [],
+                      type: chartType,
+                      mode: chartType === 'scatter' ? (chart.chart_type === 'line' ? 'lines+markers' : 'markers') : undefined,
+                      marker: { color: chart.color || '#10b981', opacity: 0.86 },
+                      line: { color: chart.color || '#10b981', width: 2 },
+                    }]
 
-              {/* 2. Product-wise Performance (Bar Chart) */}
-              {kpis.product_performance?.length > 0 && (
-                <div className="glass-panel chart-panel">
-                  <div className="panel-heading-row">
-                    <div>
-                      <p className="section-kicker">Product Distribution</p>
-                      <h3>Product-wise Sales Contribution</h3>
+                return (
+                  <div className="glass-panel chart-panel" key={chart.id}>
+                    <div className="panel-heading-row">
+                      <div>
+                        <p className="section-kicker">Dataset Visualization</p>
+                        <h3>{chart.title}</h3>
+                      </div>
                     </div>
-                    <span className="period-badge">SKU Velocity</span>
-                  </div>
-                  <div className="plot-container">
-                    <Plot
-                      data={[
-                        {
-                          x: kpis.product_performance.map((p) => p.name),
-                          y: kpis.product_performance.map((p) => p.revenue || p.units || 0),
-                          type: 'bar',
-                          name: 'Contribution',
-                          marker: {
-                            color: ['#6366f1', '#10b981', '#f59e0b', '#06b6d4', '#ec4899'],
-                            opacity: 0.85,
-                          },
-                        },
-                      ]}
-                      layout={{
-                        autosize: true,
-                        margin: { t: 15, r: 15, b: 45, l: 45 },
-                        paper_bgcolor: 'rgba(0,0,0,0)',
-                        plot_bgcolor: 'rgba(0,0,0,0)',
-                        font: { color: '#94a3b8', size: 11, family: 'Inter' },
-                        xaxis: { gridcolor: 'rgba(255,255,255,0.05)', color: '#64748b' },
-                        yaxis: { gridcolor: 'rgba(255,255,255,0.05)', color: '#64748b' },
-                        showlegend: false,
-                      }}
-                      useResizeHandler
-                      className="responsive-plot"
-                      config={{ responsive: true, displayModeBar: false }}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* 3. Shopfloor Production Trend */}
-              {hasProductionData && (
-                <div className="glass-panel chart-panel">
-                  <div className="panel-heading-row">
-                    <div>
-                      <p className="section-kicker">Shopfloor Telemetry</p>
-                      <h3>Production Trend &amp; Machine Output</h3>
+                    <div className="plot-container">
+                      <Plot
+                        data={plotData}
+                        layout={{
+                          autosize: true,
+                          margin: { t: 15, r: 15, b: 45, l: 50 },
+                          paper_bgcolor: 'rgba(0,0,0,0)',
+                          plot_bgcolor: 'rgba(0,0,0,0)',
+                          font: { color: '#94a3b8', size: 11 },
+                          xaxis: { title: chart.x_label || '', gridcolor: 'rgba(255,255,255,0.05)', color: '#64748b' },
+                          yaxis: { title: chart.y_label || '', gridcolor: 'rgba(255,255,255,0.05)', color: '#64748b' },
+                          showlegend: false,
+                        }}
+                        useResizeHandler
+                        className="responsive-plot"
+                        config={{ responsive: true, displayModeBar: false }}
+                      />
                     </div>
-                    <span className="period-badge">Output Units</span>
                   </div>
-                  <div className="plot-container">
-                    <Plot
-                      data={[
-                        {
-                          x: (kpis.production_trend || []).map((_, i) => `Shift ${i + 1}`),
-                          y: kpis.production_trend || [70,72,74,76,78,80,82,79,83,85],
-                          type: 'bar',
-                          name: 'Output (k Units)',
-                          marker: { color: '#6366f1', opacity: 0.85 },
-                        },
-                      ]}
-                      layout={{
-                        autosize: true,
-                        margin: { t: 15, r: 15, b: 35, l: 45 },
-                        paper_bgcolor: 'rgba(0,0,0,0)',
-                        plot_bgcolor: 'rgba(0,0,0,0)',
-                        font: { color: '#94a3b8', size: 11, family: 'Inter' },
-                        xaxis: { gridcolor: 'rgba(255,255,255,0.05)', color: '#64748b' },
-                        yaxis: { gridcolor: 'rgba(255,255,255,0.05)', color: '#64748b' },
-                        showlegend: false,
-                      }}
-                      useResizeHandler
-                      className="responsive-plot"
-                      config={{ responsive: true, displayModeBar: false }}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* 4. Financial Analysis (Revenue vs Cost / Profit) */}
-              {kpis.revenue && (
-                <div className="glass-panel chart-panel">
-                  <div className="panel-heading-row">
-                    <div>
-                      <p className="section-kicker">Fiscal Health</p>
-                      <h3>Revenue vs Operating Cost</h3>
-                    </div>
-                    <span className="period-badge">Margin</span>
-                  </div>
-                  <div className="plot-container">
-                    <Plot
-                      data={[
-                        {
-                          labels: ['Operating Margin', 'Direct Manufacturing Cost', 'Logistics & Hubs'],
-                          values: [42, 38, 20],
-                          type: 'pie',
-                          hole: 0.5,
-                          marker: {
-                            colors: ['#10b981', '#6366f1', '#f59e0b'],
-                          },
-                          textinfo: 'label+percent',
-                        },
-                      ]}
-                      layout={{
-                        autosize: true,
-                        margin: { t: 15, r: 15, b: 25, l: 15 },
-                        paper_bgcolor: 'rgba(0,0,0,0)',
-                        plot_bgcolor: 'rgba(0,0,0,0)',
-                        font: { color: '#94a3b8', size: 11, family: 'Inter' },
-                        showlegend: false,
-                      }}
-                      useResizeHandler
-                      className="responsive-plot"
-                      config={{ responsive: true, displayModeBar: false }}
-                    />
-                  </div>
-                </div>
-              )}
+                )
+              })}
+              {!dynamicCharts.length && <p className="empty-state">No charts can be generated from the available columns.</p>}
             </section>
           </main>
         )}
@@ -1158,7 +1041,7 @@ function App() {
                   <div className="title-with-badge">
                     <div>
                       <p className="section-kicker">Machine Learning Regressor</p>
-                      <h3>Forecast Next Month — Random Forest</h3>
+                      <h3>Forecast From Uploaded Data</h3>
                     </div>
                   </div>
                   <span className="ml-tag">
@@ -1166,28 +1049,25 @@ function App() {
                   </span>
                 </div>
 
+                {forecast?.has_forecast && (
                 <div className="forecast-kpi-banner glass-card">
                   <div className="forecast-stat">
-                    <span className="forecast-label">Expected Sales</span>
+                    <span className="forecast-label">Projected {forecast?.target_metric || 'Metric'}</span>
                     <strong className="forecast-val text-emerald">
-                      ₹{Number(forecast?.expected_revenue || forecast?.predicted_revenue || kpis.forecast_next_month || 545000).toLocaleString()}
+                      {Number(forecast?.predicted_revenue ?? forecast?.predicted_total ?? 0).toLocaleString()}
                     </strong>
                   </div>
                   <div className="forecast-stat">
-                    <span className="forecast-label">Expected Growth</span>
-                    <strong className="forecast-val text-primary-accent">
-                      +12.4%
-                    </strong>
-                  </div>
-                  <div className="forecast-stat">
-                    <span className="forecast-label">Predicted Demand</span>
+                    <span className="forecast-label">Historical Periods</span>
                     <strong className="forecast-val text-indigo">
-                      {forecast?.predicted_demand
-                        ? `${Number(forecast.predicted_demand).toLocaleString()} units`
-                        : '12,500 units'}
+                      {Number(forecast?.model_performance?.training_rows || forecast?.history_points || 0).toLocaleString()}
                     </strong>
                   </div>
                 </div>
+                )}
+                {!forecast?.has_forecast && (
+                  <p className="empty-state">{forecast?.message || 'A forecast is unavailable for the current dataset.'}</p>
+                )}
 
                 {forecastPoints.length > 0 && (
                   <div className="plot-container forecast-plot-box">
@@ -1198,7 +1078,7 @@ function App() {
                           y: forecastPoints.map((p) => p.predicted_revenue),
                           type: 'scatter',
                           mode: 'lines+markers',
-                          name: 'Projected Daily Revenue',
+                          name: `Projected ${forecast?.target_metric || 'Value'}`,
                           line: { color: '#818cf8', width: 3, shape: 'spline' },
                           marker: { color: '#6366f1', size: 6 },
                           fill: 'tozeroy',
@@ -1207,13 +1087,13 @@ function App() {
                       ]}
                       layout={{
                         autosize: true,
-                        title: { text: '30-Day Predictive Revenue Curve', font: { size: 13, color: '#e2e8f0', family: 'Inter' } },
+                        title: { text: `${forecast?.target_metric || 'Metric'} Forecast`, font: { size: 13, color: '#e2e8f0' } },
                         margin: { t: 35, r: 15, b: 45, l: 55 },
                         paper_bgcolor: 'rgba(0,0,0,0)',
                         plot_bgcolor: 'rgba(0,0,0,0)',
                         font: { color: '#94a3b8', size: 11, family: 'Inter' },
                         xaxis: { gridcolor: 'rgba(255,255,255,0.05)', color: '#64748b' },
-                        yaxis: { gridcolor: 'rgba(255,255,255,0.05)', tickprefix: '₹', color: '#64748b' },
+                        yaxis: { title: forecast?.target_metric || '', gridcolor: 'rgba(255,255,255,0.05)', color: '#64748b' },
                         showlegend: false,
                       }}
                       useResizeHandler
@@ -1225,29 +1105,21 @@ function App() {
 
                 {forecast?.product_forecasts?.length > 0 && (
                   <div className="product-forecast-table-wrap">
-                    <h4>Product-wise Next Month Forecast</h4>
+                    <h4>Category Forecast</h4>
                     <table className="mini-table">
                       <thead>
                         <tr>
-                          <th>Product</th>
-                          <th>Predicted Demand</th>
-                          <th>Expected Revenue</th>
-                          <th>Demand Share</th>
-                          <th>Trajectory</th>
+                          <th>Category</th>
+                          <th>Projected Value</th>
+                          <th>Share</th>
                         </tr>
                       </thead>
                       <tbody>
                         {forecast.product_forecasts.map((pf, idx) => (
                           <tr key={idx}>
                             <td><strong>{pf.product}</strong></td>
-                            <td>{Number(pf.predicted_demand).toLocaleString()} units</td>
-                            <td>₹{Number(pf.predicted_revenue).toLocaleString()}</td>
+                            <td>{Number(pf.predicted_revenue).toLocaleString()}</td>
                             <td>{pf.share_percentage}%</td>
-                            <td>
-                              <span className={`trajectory-pill ${pf.trend}`}>
-                                <TrendingUp size={11} /> {pf.trend}
-                              </span>
-                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -1306,10 +1178,10 @@ function App() {
                   <div className="title-with-badge">
                     <div>
                       <p className="section-kicker">Stock Logistics</p>
-                      <h3>Inventory Status &amp; Reorder Levels</h3>
+                      <h3>Stock Measures &amp; Thresholds</h3>
                     </div>
                   </div>
-                  <span className="period-badge">Warehouse Hubs</span>
+                  <span className="period-badge">Dataset Values</span>
                 </div>
 
                 {inventoryData?.alerts?.length > 0 ? (
@@ -1324,7 +1196,7 @@ function App() {
                 ) : (
                   <div className="clean-alert-box" style={{ marginBottom: '16px' }}>
                     <PackageCheck size={17} className="text-emerald" />
-                    <p>All warehouse SKUs are above designated safety reorder thresholds.</p>
+                    <p>{inventoryData?.has_inventory ? 'No records were flagged against a supplied reorder threshold.' : 'No stock measure and reorder threshold are both available in this dataset.'}</p>
                   </div>
                 )}
 
@@ -1356,13 +1228,13 @@ function App() {
             ══════════════════════════════════════════ */}
         {activeTab === 'alerts' && (
           <main className="page-content">
-            {/* Sales Decline Alert Section */}
+            {/* Dataset change findings */}
             <section className="section-block" id="decline">
               <div className="glass-panel">
                 <div className="panel-heading-row">
                   <div>
                     <p className="section-kicker">Performance Detection</p>
-                    <h3>Sales Decline Detection</h3>
+                    <h3>Declining Metrics &amp; Segments</h3>
                   </div>
                   <span className="period-badge">Period-over-Period</span>
                 </div>
@@ -1379,7 +1251,7 @@ function App() {
                         </div>
                         <h4 className="decline-product">{p.product}</h4>
                         <p className="decline-detail">
-                          Sales decreased by <strong>{p.decline_percentage}%</strong> compared to the previous period (from ₹{Number(p.previous_sales || 0).toLocaleString()} down to ₹{Number(p.current_sales || 0).toLocaleString()}).
+                          {p.metric || 'Metric'} decreased by <strong>{p.decline_percentage}%</strong> compared to the previous period (from {Number(p.previous_sales || 0).toLocaleString()} to {Number(p.current_sales || 0).toLocaleString()}).
                         </p>
                       </div>
                     ))}
@@ -1387,7 +1259,7 @@ function App() {
                 ) : (
                   <div className="clean-alert-box">
                     <CheckCircle2 size={17} className="text-emerald" />
-                    <p>No negative sales velocity drops detected across active product lines.</p>
+                    <p>No declining segments were identified in the active dataset.</p>
                   </div>
                 )}
               </div>
@@ -1401,55 +1273,28 @@ function App() {
                     <p className="section-kicker">Cognitive Reasoning Engine</p>
                     <h3>AI Root Cause Analysis</h3>
                   </div>
-                  <span className="period-badge">Probability Rank</span>
+                  <span className="period-badge">Dataset Evidence</span>
                 </div>
 
-                <div className="root-cause-grid">
-                  <div className="root-cause-card glass-card">
-                    <div className="rc-header">
-                      <Lightbulb size={17} className="text-amber" />
-                      <strong>Inventory Shortage Risk</strong>
-                      <span className="rc-prob-badge">
-                        {inventoryData?.low_stock_count > 0 ? '88% probability' : '85% probability'}
-                      </span>
-                    </div>
-                    <p className="rc-desc">
-                      {inventoryData?.low_stock_count > 0
-                        ? `${inventoryData.low_stock_count} SKUs are below safety reorder threshold, threatening order fulfillment velocity.`
-                        : 'Regional stockouts in key logistics hubs restricted fulfillment for top SKU orders.'}
-                    </p>
+                {alertsData?.root_causes?.length > 0 ? (
+                  <div className="root-cause-grid">
+                    {alertsData.root_causes.map((cause, idx) => (
+                      <div className="root-cause-card glass-card" key={`${cause.title}-${idx}`}>
+                        <div className="rc-header">
+                          <Lightbulb size={17} className="text-amber" />
+                          <strong>{cause.title}</strong>
+                        </div>
+                        <p className="rc-desc">{cause.finding || cause.condition}</p>
+                        {cause.action && <p className="rc-desc">Suggested action: {cause.action}</p>}
+                      </div>
+                    ))}
                   </div>
-
-                  <div className="root-cause-card glass-card">
-                    <div className="rc-header">
-                      <Factory size={17} className="text-primary-accent" />
-                      <strong>Production Bottleneck</strong>
-                      <span className="rc-prob-badge">
-                        {kpis.efficiency ? `${Math.round(100 - kpis.efficiency + 65)}% probability` : '72% probability'}
-                      </span>
-                    </div>
-                    <p className="rc-desc">
-                      {kpis.defect_rate > 2
-                        ? `Defect rate spike (${kpis.defect_rate}%) on assembly lines created output friction and dispatch backlog.`
-                        : 'Shopfloor downtime on primary fabrication lines created a 4-day dispatch backlog.'}
-                    </p>
+                ) : (
+                  <div className="clean-alert-box">
+                    <CheckCircle2 size={17} className="text-emerald" />
+                    <p>No evidence-backed root causes were identified in the available dataset.</p>
                   </div>
-
-                  <div className="root-cause-card glass-card">
-                    <div className="rc-header">
-                      <TrendingDown size={17} className="text-rose" />
-                      <strong>Regional Demand Shift</strong>
-                      <span className="rc-prob-badge">
-                        {decliningProducts.length > 0 ? '91% probability' : '68% probability'}
-                      </span>
-                    </div>
-                    <p className="rc-desc">
-                      {decliningProducts.length > 0
-                        ? `Sales drop detected across ${decliningProducts.map((p) => p.product).slice(0, 2).join(', ')} due to seasonal demand shifts.`
-                        : 'Seasonal shift observed in peripheral accessories across Central fulfillment territories.'}
-                    </p>
-                  </div>
-                </div>
+                )}
               </div>
             </section>
 
@@ -1465,23 +1310,20 @@ function App() {
                 </div>
 
                 <div className="recs-list-container">
-                  {(recommendationsList.length > 0
-                    ? recommendationsList
-                    : [
-                        { priority: 'High', title: 'Scale Production', action: 'Increase production of high-demand SKUs by 15-20% to meet positive forecast demand.' },
-                        { priority: 'High', title: 'Replenish Inventory', action: 'Issue raw material replenishment orders immediately to prevent warehouse stockouts.' },
-                        { priority: 'Medium', title: 'Schedule Maintenance', action: 'Schedule preventative maintenance during off-peak shifts to reduce shopfloor downtime.' },
-                        { priority: 'Low', title: 'Rebalance Logistics', action: 'Rebalance regional warehouse stock distribution between East and Central fulfillment hubs.' },
-                      ]
-                  ).map((rec, idx) => (
+                  {recommendationsList.length > 0 ? recommendationsList.map((rec, idx) => (
                     <div key={idx} className={`rec-item-card glass-card priority-${(rec.priority || 'medium').toLowerCase()}`}>
                       <div className="rec-priority-pill">{rec.priority || 'Action'}</div>
                       <div className="rec-content-wrap">
                         {rec.title && <strong className="rec-title">{rec.title}</strong>}
-                        <p className="rec-action-text">{rec.action || rec.description || rec.recommendation || (typeof rec === 'string' ? rec : '')}</p>
+                        <p className="rec-action-text">{rec.suggested_action || rec.action || rec.description || rec.recommendation || (typeof rec === 'string' ? rec : '')}</p>
                       </div>
                     </div>
-                  ))}
+                  )) : (
+                    <div className="clean-alert-box">
+                      <CheckCircle2 size={17} className="text-emerald" />
+                      <p>No recommendations are supported by the current findings.</p>
+                    </div>
+                  )}
                 </div>
               </div>
             </section>

@@ -207,7 +207,7 @@ function ForgotPassword({ onBackToLogin, onResetSuccess, API_BASE }) {
           <form onSubmit={handleResetPassword}>
             <div className="login-header">
               <div className="brand-badge">
-                <ShieldCheck size={26} className="text-primary-accent" />
+                <ShieldCheck size={26} className="text-accent" />
               </div>
               <h2>Set New Password</h2>
               <p className="login-subtitle">
@@ -216,7 +216,7 @@ function ForgotPassword({ onBackToLogin, onResetSuccess, API_BASE }) {
             </div>
 
             <div className="auth-form" style={{ marginTop: '16px' }}>
-              <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+              <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                 6-Digit Reset Code
               </label>
               <div className="otp-inputs-wrapper" onPaste={handlePaste} style={{ marginBottom: '14px' }}>
@@ -302,7 +302,7 @@ function ForgotPassword({ onBackToLogin, onResetSuccess, API_BASE }) {
         {step === 'success' && (
           <div style={{ textAlign: 'center', padding: '20px 0' }}>
             <div className="brand-badge" style={{ margin: '0 auto 16px', background: 'rgba(16,185,129,0.15)' }}>
-              <CheckCircle2 size={32} className="text-emerald" />
+              <CheckCircle2 size={32} className="text-success" />
             </div>
             <h2>Password Reset Complete!</h2>
             <p className="login-subtitle" style={{ margin: '10px 0 24px' }}>

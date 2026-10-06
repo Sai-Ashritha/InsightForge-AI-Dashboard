@@ -181,7 +181,7 @@ function OTPVerify({
   const faqs = [
     {
       q: 'Why do I need verification?',
-      a: 'Email verification secures your manufacturing telemetry data and ensures only authorized enterprise analysts can access predictive intelligence models.',
+      a: 'Email verification protects your uploaded datasets and ensures only authorized users can access analysis and predictive tools.',
     },
     {
       q: 'How do I get my verification code?',
@@ -203,7 +203,7 @@ function OTPVerify({
         {/* Header */}
         <div className="login-header">
           <div className="brand-badge otp-badge">
-            <ShieldCheck size={28} className="text-primary-accent" />
+            <ShieldCheck size={28} className="text-accent" />
           </div>
           <h2>Enter Verification Code</h2>
           <p className="login-subtitle">
@@ -299,7 +299,7 @@ function OTPVerify({
             onClick={() => setHelpOpen(!helpOpen)}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Sparkles size={15} className="text-amber" />
+              <Sparkles size={15} className="text-warning" />
               <strong>Need help? Ask InsightForge Assistant</strong>
             </div>
             {helpOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
@@ -314,7 +314,7 @@ function OTPVerify({
                     className="otp-faq-q"
                     onClick={() => setSelectedFaq(selectedFaq === i ? null : i)}
                   >
-                    <HelpCircle size={13} className="text-indigo" />
+                    <HelpCircle size={13} className="text-accent" />
                     <span>"{faq.q}"</span>
                   </button>
                   {selectedFaq === i && (

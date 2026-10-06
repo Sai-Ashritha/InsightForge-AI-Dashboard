@@ -1,10 +1,12 @@
 import { LayoutDashboard, BarChart2, PieChart, Layers } from 'lucide-react'
 
 function BIReport({ kpis }) {
-
-  const products = Array.isArray(kpis?.product_performance) && kpis.product_performance.length > 0
-    ? kpis.product_performance
-    : []
+  const metrics = kpis?.dynamic_analytics?.kpis || []
+  const categoryChart = kpis?.dynamic_analytics?.charts?.find((chart) => chart.id === 'chart_category_bar')
+  const categories = categoryChart?.x?.map((name, index) => ({
+    name,
+    value: categoryChart.y[index],
+  })) || []
 
   const summaryMetrics = [
     {
@@ -69,22 +71,13 @@ function BIReport({ kpis }) {
                   </tr>
                 </thead>
                 <tbody>
-                  <tr>
-                    <td>Revenue</td>
-                    <td>{kpis?.revenue ? `₹${Number(kpis.revenue).toLocaleString()}` : 'Not available'}</td>
-                  </tr>
-                  <tr>
-                    <td>Production</td>
-                    <td>{kpis?.production ? Number(kpis.production).toLocaleString() : 'Not available'}</td>
-                  </tr>
-                  <tr>
-                    <td>Inventory</td>
-                    <td>{kpis?.inventory ? Number(kpis.inventory).toLocaleString() : 'Not available'}</td>
-                  </tr>
-                  <tr>
-                    <td>Defect rate</td>
-                    <td>{kpis?.defect_rate ? `${Number(kpis.defect_rate).toFixed(2)}%` : 'Not available'}</td>
-                  </tr>
+                  {metrics.map((metric) => (
+                    <tr key={metric.key}>
+                      <td>{metric.title}</td>
+                      <td>{metric.value}{metric.unit && !String(metric.value).includes(metric.unit) ? ` ${metric.unit}` : ''}</td>
+                    </tr>
+                  ))}
+                  {!metrics.length && <tr><td colSpan="2">No metrics available for this dataset.</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -96,23 +89,21 @@ function BIReport({ kpis }) {
               <h4>Top category contribution</h4>
             </div>
             <div className="bi-portfolio-list">
-              {products.length > 0 ? products.map((p, idx) => (
+              {categories.length > 0 ? categories.map((p, idx) => (
                 <div key={idx} className="portfolio-item">
                   <div className="portfolio-item-header">
                     <span className="portfolio-name">{p.name}</span>
-                    <span className="portfolio-rev">
-                      {Number(p.revenue ?? 0).toLocaleString()} ({p.share ?? 0}%)
-                    </span>
+                    <span className="portfolio-rev">{Number(p.value ?? 0).toLocaleString()}</span>
                   </div>
                   <div className="progress-bar-bg">
                     <div
                       className={`progress-bar-fill fill-${idx % 4}`}
-                      style={{ width: `${Math.min(100, Number(p.share ?? 0) * 2)}%` }}
+                      style={{ width: `${Math.min(100, Math.max(4, Number(p.value ?? 0) / Math.max(...categories.map((item) => Number(item.value) || 0), 1) * 100))}%` }}
                     />
                   </div>
                 </div>
               )) : (
-                <p className="empty-state-small">Upload a dataset with category and metric columns to populate this report.</p>
+                <p className="empty-state-small">No category breakdown is available for the current dataset.</p>
               )}
             </div>
           </div>
